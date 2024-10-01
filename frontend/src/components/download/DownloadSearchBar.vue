@@ -65,7 +65,7 @@ async function searchByKeyword(keyword: string, pageNumber: number = 1) {
     searchByIdButtonDisabled.value = true;
     const response = await SearchComicByKeyword(keyword, pageNumber, store.proxyUrl);
     if (response.code != 0) {
-      notification.create({type: "error", title: "搜索失败", meta: response.msg,});
+      notification.create({type: "error", title: "搜索失败", description: response.msg,});
       return;
     }
 
@@ -86,7 +86,7 @@ async function searchById(input: string) {
   }
   const comicId = isNumeric(input) ? input : extractComicIdFrom(input);
   if (!comicId) {
-    notification.create({type: "error", title: "搜索失败", content: "请输入漫画ID或漫画链接", duration: 2000,});
+    notification.create({type: "error", title: "搜索失败", description: "请输入漫画ID或漫画链接", duration: 2000,});
     return;
   }
 
@@ -95,7 +95,7 @@ async function searchById(input: string) {
     searchByKeywordButtonDisabled.value = true;
     const response = await SearchComicById(comicId, store.proxyUrl, store.cacheDirectory);
     if (response.code != 0) {
-      notification.create({type: "error", title: "搜索失败", meta: response.msg,});
+      notification.create({type: "error", title: "搜索失败", description: response.msg,});
       return;
     }
 
