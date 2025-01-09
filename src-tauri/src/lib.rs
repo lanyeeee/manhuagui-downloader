@@ -1,10 +1,12 @@
 mod commands;
 mod config;
-mod extensions;
 mod errors;
+mod extensions;
+mod manhuagui_client;
 
 use anyhow::Context;
 use config::Config;
+use manhuagui_client::ManhuaguiClient;
 use parking_lot::RwLock;
 use tauri::{Manager, Wry};
 
@@ -17,7 +19,7 @@ fn generate_context() -> tauri::Context<Wry> {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let builder = tauri_specta::Builder::<Wry>::new()
-        .commands(tauri_specta::collect_commands![greet, get_config])
+        .commands(tauri_specta::collect_commands![greet, get_config, login])
         .events(tauri_specta::collect_events![]);
 
     #[cfg(debug_assertions)]
@@ -45,6 +47,10 @@ pub fn run() {
 
             let config = RwLock::new(Config::new(app.handle())?);
             app.manage(config);
+
+            let manhuagui_client = ManhuaguiClient::new(app.handle().clone());
+            app.manage(manhuagui_client);
+
             Ok(())
         })
         .run(generate_context())
