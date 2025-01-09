@@ -18,6 +18,14 @@ async login(username: string, password: string) : Promise<Result<string, Command
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
+},
+async getUserProfile() : Promise<Result<UserProfile, CommandError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("get_user_profile") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
 }
 }
 
@@ -32,7 +40,8 @@ async login(username: string, password: string) : Promise<Result<string, Command
 /** user-defined types **/
 
 export type CommandError = string
-export type Config = { downloadDir: string }
+export type Config = { cookie: string; downloadDir: string }
+export type UserProfile = { username: string; avatar: string }
 
 /** tauri-specta globals **/
 

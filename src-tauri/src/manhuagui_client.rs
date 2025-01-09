@@ -1,11 +1,14 @@
 use std::time::Duration;
 
 use anyhow::{anyhow, Context};
+use parking_lot::RwLock;
 use reqwest::StatusCode;
 use reqwest_middleware::ClientWithMiddleware;
 use reqwest_retry::{policies::ExponentialBackoff, Jitter, RetryTransientMiddleware};
 use serde_json::json;
-use tauri::AppHandle;
+use tauri::{AppHandle, Manager};
+
+use crate::{config::Config, types::UserProfile};
 
 #[derive(Clone)]
 pub struct ManhuaguiClient {
@@ -51,6 +54,28 @@ impl ManhuaguiClient {
             .to_string();
 
         Ok(cookie)
+    }
+
+    pub async fn get_user_profile(&self) -> anyhow::Result<UserProfile> {
+        let cookie = self.app.state::<RwLock<Config>>().read().cookie.clone();
+        // 发送获取用户信息请求
+        let http_resp = self
+            .api_client
+            .get("https://www.manhuagui.com/user/center/index")
+            .header("cookie", cookie)
+            .send()
+            .await?;
+        // 检查http响应状态码
+        let status = http_resp.status();
+        let body = http_resp.text().await?;
+        if status == StatusCode::FOUND {
+            return Err(anyhow!("未登录、cookie已过期或cookie无效"));
+        } else if status != StatusCode::OK {
+            return Err(anyhow!("预料之外的状态码({status}): {body}"));
+        }
+
+        let user_profile = UserProfile::from_html(&body).context("将body转换为UserProfile失败")?;
+        Ok(user_profile)
     }
 }
 
