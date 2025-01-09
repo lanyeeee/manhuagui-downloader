@@ -7,6 +7,7 @@ use tauri::{AppHandle, Manager};
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct Config {
+    pub cookie: String,
     pub download_dir: PathBuf,
 }
 
@@ -15,6 +16,7 @@ impl Config {
         let app_data_dir = app.path().app_data_dir()?;
         let config_path = app_data_dir.join("config.json");
         let default_config = Config {
+            cookie: String::new(),
             download_dir: app_data_dir.join("漫画下载"),
         };
         // 如果配置文件存在且能够解析，则使用配置文件中的配置，否则使用默认配置

@@ -2,7 +2,9 @@ use anyhow::Context;
 use parking_lot::RwLock;
 use tauri::State;
 
-use crate::{config::Config, errors::CommandResult, manhuagui_client::ManhuaguiClient};
+use crate::{
+    config::Config, errors::CommandResult, manhuagui_client::ManhuaguiClient, types::UserProfile,
+};
 
 #[tauri::command]
 #[specta::specta]
@@ -29,4 +31,16 @@ pub async fn login(
         .await
         .context("使用账号密码登录失败")?;
     Ok(cookie)
+}
+
+#[tauri::command(async)]
+#[specta::specta]
+pub async fn get_user_profile(
+    manhuagui_client: State<'_, ManhuaguiClient>,
+) -> CommandResult<UserProfile> {
+    let user_profile = manhuagui_client
+        .get_user_profile()
+        .await
+        .context("获取用户信息失败")?;
+    Ok(user_profile)
 }

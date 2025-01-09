@@ -14,8 +14,8 @@ function App() {
   }
 
   async function test() {
-    const config = await commands.getConfig()
-    console.log(config)
+    const result = await commands.getUserProfile()
+    console.log(result)
   }
 
   return (
