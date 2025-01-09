@@ -1,6 +1,8 @@
+use anyhow::Context;
 use parking_lot::RwLock;
+use tauri::State;
 
-use crate::config::Config;
+use crate::{config::Config, errors::CommandResult, manhuagui_client::ManhuaguiClient};
 
 #[tauri::command]
 #[specta::specta]
@@ -13,4 +15,18 @@ pub fn greet(name: &str) -> String {
 #[allow(clippy::needless_pass_by_value)]
 pub fn get_config(config: tauri::State<RwLock<Config>>) -> Config {
     config.read().clone()
+}
+
+#[tauri::command(async)]
+#[specta::specta]
+pub async fn login(
+    manhuagui_client: State<'_, ManhuaguiClient>,
+    username: String,
+    password: String,
+) -> CommandResult<String> {
+    let cookie = manhuagui_client
+        .login(&username, &password)
+        .await
+        .context("使用账号密码登录失败")?;
+    Ok(cookie)
 }
