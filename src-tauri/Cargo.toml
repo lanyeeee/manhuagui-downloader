@@ -27,3 +27,9 @@ specta = { version = "2.0.0-rc" }
 specta-util = { version = "0.0.7", features = ["export"] }
 tauri-specta = { version = "2.0.0-rc", features = ["derive", "typescript"] }
 specta-typescript = { version = "0.0.7" }
+
+[profile.release]
+strip = true
+lto = true
+codegen-units = 1
+panic = "abort"
