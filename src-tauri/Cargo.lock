@@ -1989,6 +1989,8 @@ dependencies = [
 name = "manhuagui-downloader"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
+ "parking_lot",
  "serde",
  "serde_json",
  "specta",

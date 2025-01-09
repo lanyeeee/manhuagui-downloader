@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import reactLogo from './assets/react.svg'
 import './App.css'
-import { Button } from 'antd'
 import { commands } from './bindings.ts'
+import { Button } from 'antd'
 
 function App() {
   const [greetMsg, setGreetMsg] = useState('')
@@ -11,6 +11,11 @@ function App() {
   async function greet() {
     // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
     setGreetMsg(await commands.greet(name))
+  }
+
+  async function test() {
+    const config = await commands.getConfig()
+    console.log(config)
   }
 
   return (
@@ -35,11 +40,16 @@ function App() {
         onSubmit={(e) => {
           e.preventDefault()
           greet()
-        }}>
-        <input id="greet-input" onChange={(e) => setName(e.currentTarget.value)} placeholder="Enter a name..." />
+        }}
+      >
+        <input
+          id="greet-input"
+          onChange={(e) => setName(e.currentTarget.value)}
+          placeholder="Enter a name..."
+        />
         <button type="submit">Greet</button>
       </form>
-      <Button onClick={greet}>测试</Button>
+      <Button onClick={test}>测试</Button>
       <p className="text-red">{greetMsg}</p>
     </main>
   )
