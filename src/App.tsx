@@ -2,6 +2,7 @@ import { useState } from 'react'
 import reactLogo from './assets/react.svg'
 import { invoke } from '@tauri-apps/api/core'
 import './App.css'
+import { Button } from 'antd'
 
 function App() {
   const [greetMsg, setGreetMsg] = useState('')
@@ -38,6 +39,7 @@ function App() {
         <input id="greet-input" onChange={(e) => setName(e.currentTarget.value)} placeholder="Enter a name..." />
         <button type="submit">Greet</button>
       </form>
+      <Button onClick={greet}>测试</Button>
       <p className="text-red">{greetMsg}</p>
     </main>
   )
