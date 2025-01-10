@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import './App.css'
 import { commands, Config, UserProfile } from './bindings.ts'
-import { App as AntdApp, Button, Input } from 'antd'
+import { App as AntdApp, Avatar, Button, Input } from 'antd'
 import LoginDialog from './components/LoginDialog.tsx'
 
 function App() {
@@ -68,6 +68,12 @@ function App() {
               账号登录
             </Button>
             <Button onClick={test}>测试用</Button>
+            {userProfile !== undefined && (
+              <div className="flex items-center">
+                <Avatar src={userProfile.avatar} />
+                <span className="whitespace-nowrap">{userProfile.username}</span>
+              </div>
+            )}
           </div>
 
           <LoginDialog
