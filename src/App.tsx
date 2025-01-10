@@ -1,58 +1,89 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
+import { useEffect, useRef, useState } from 'react'
 import './App.css'
-import { commands } from './bindings.ts'
-import { Button } from 'antd'
+import { commands, Config, UserProfile } from './bindings.ts'
+import { App as AntdApp, Button, Input } from 'antd'
+import LoginDialog from './components/LoginDialog.tsx'
 
 function App() {
-  const [greetMsg, setGreetMsg] = useState('')
-  const [name, setName] = useState('')
+  const { message, notification } = AntdApp.useApp()
 
-  async function greet() {
-    // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    setGreetMsg(await commands.greet(name))
-  }
+  const hasRendered = useRef(false)
+
+  const [config, setConfig] = useState<Config>()
+  // TODO: 把userProfile显示出来
+  const [userProfile, setUserProfile] = useState<UserProfile>()
+  const [loginDialogShowing, setLoginDialogShowing] = useState<boolean>(false)
+
+  useEffect(() => {
+    if (hasRendered.current === false || config === undefined) {
+      return
+    }
+
+    commands.saveConfig(config).then(async () => {
+      message.success('保存配置成功')
+    })
+  }, [config])
+
+  useEffect(() => {
+    if (hasRendered.current === false || config === undefined || config.cookie === '') {
+      return
+    }
+
+    commands.getUserProfile().then(async (result) => {
+      if (result.status === 'error') {
+        notification.error({ message: '获取用户信息失败', description: result.error, duration: 0 })
+        setUserProfile(undefined)
+        return
+      }
+
+      setUserProfile(result.data)
+      message.success('获取用户信息成功')
+    })
+  }, [config?.cookie])
+
+  useEffect(() => {
+    commands.getConfig().then((result) => {
+      setConfig(result)
+    })
+
+    hasRendered.current = true
+  }, [])
 
   async function test() {
-    const result = await commands.getUserProfile()
-    console.log(result)
+    console.log(userProfile)
   }
 
   return (
-    <main className="container">
-      <h1>Welcome to Tauri + React</h1>
+    <>
+      {config !== undefined && (
+        <div className="h-full flex flex-col">
+          <div className="flex">
+            <Input
+              prefix="Cookie："
+              value={config.cookie}
+              onChange={(e) => setConfig({ ...config, cookie: e.target.value })}
+              allowClear={true}
+            />
+            <Button type="primary" onClick={() => setLoginDialogShowing(true)}>
+              账号登录
+            </Button>
+            <Button onClick={test}>测试用</Button>
+          </div>
 
-      <div className="row">
-        <a href="https://vitejs.dev" target="_blank">
-          <img src="/vite.svg" className="logo vite" alt="Vite logo" />
-        </a>
-        <a href="https://tauri.app" target="_blank">
-          <img src="/tauri.svg" className="logo tauri" alt="Tauri logo" />
-        </a>
-        <a href="https://reactjs.org" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <p>Click on the Tauri, Vite, and React logos to learn more.</p>
-
-      <form
-        className="row"
-        onSubmit={(e) => {
-          e.preventDefault()
-          greet()
-        }}
-      >
-        <input
-          id="greet-input"
-          onChange={(e) => setName(e.currentTarget.value)}
-          placeholder="Enter a name..."
-        />
-        <button type="submit">Greet</button>
-      </form>
-      <Button onClick={test}>测试</Button>
-      <p className="text-red">{greetMsg}</p>
-    </main>
+          <LoginDialog
+            loginDialogShowing={loginDialogShowing}
+            setLoginDialogShowing={setLoginDialogShowing}
+            config={config}
+            setConfig={setConfig}
+          />
+        </div>
+      )}
+    </>
   )
 }
 
-export default App
+export default () => (
+  <AntdApp notification={{ placement: 'bottomRight', showProgress: true }}>
+    <App />
+  </AntdApp>
+)
