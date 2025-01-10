@@ -1,6 +1,6 @@
 use anyhow::Context;
 use parking_lot::RwLock;
-use tauri::State;
+use tauri::{AppHandle, State};
 
 use crate::{
     config::Config, errors::CommandResult, manhuagui_client::ManhuaguiClient, types::UserProfile,
@@ -17,6 +17,20 @@ pub fn greet(name: &str) -> String {
 #[allow(clippy::needless_pass_by_value)]
 pub fn get_config(config: tauri::State<RwLock<Config>>) -> Config {
     config.read().clone()
+}
+
+#[tauri::command(async)]
+#[specta::specta]
+#[allow(clippy::needless_pass_by_value)]
+pub fn save_config(
+    app: AppHandle,
+    config_state: State<RwLock<Config>>,
+    config: Config,
+) -> CommandResult<()> {
+    let mut config_state = config_state.write();
+    *config_state = config;
+    config_state.save(&app)?;
+    Ok(())
 }
 
 #[tauri::command(async)]
