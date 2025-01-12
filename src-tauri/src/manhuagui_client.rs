@@ -8,7 +8,10 @@ use reqwest_retry::{policies::ExponentialBackoff, Jitter, RetryTransientMiddlewa
 use serde_json::json;
 use tauri::{AppHandle, Manager};
 
-use crate::{config::Config, types::UserProfile};
+use crate::{
+    config::Config,
+    types::{SearchResult, UserProfile},
+};
 
 #[derive(Clone)]
 pub struct ManhuaguiClient {
@@ -76,6 +79,19 @@ impl ManhuaguiClient {
 
         let user_profile = UserProfile::from_html(&body).context("将body转换为UserProfile失败")?;
         Ok(user_profile)
+    }
+
+    pub async fn search(&self, keyword: &str, page_num: i64) -> anyhow::Result<SearchResult> {
+        let url = format!("https://www.manhuagui.com/s/{keyword}_p{page_num}.html");
+        let http_resp = self.api_client.get(url).send().await?;
+        let status = http_resp.status();
+        let body = http_resp.text().await?;
+        if status != StatusCode::OK {
+            return Err(anyhow!("预料之外的状态码({status}): {body}"));
+        }
+        let search_result =
+            SearchResult::from_html(&body).context("将body转换为SearchResult失败")?;
+        Ok(search_result)
     }
 }
 

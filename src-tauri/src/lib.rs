@@ -26,6 +26,7 @@ pub fn run() {
             save_config,
             login,
             get_user_profile,
+            search,
         ])
         .events(tauri_specta::collect_events![]);
 

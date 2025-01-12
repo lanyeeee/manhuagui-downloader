@@ -3,7 +3,10 @@ use parking_lot::RwLock;
 use tauri::{AppHandle, State};
 
 use crate::{
-    config::Config, errors::CommandResult, manhuagui_client::ManhuaguiClient, types::UserProfile,
+    config::Config,
+    errors::CommandResult,
+    manhuagui_client::ManhuaguiClient,
+    types::{SearchResult, UserProfile},
 };
 
 #[tauri::command]
@@ -57,4 +60,18 @@ pub async fn get_user_profile(
         .await
         .context("获取用户信息失败")?;
     Ok(user_profile)
+}
+
+#[tauri::command(async)]
+#[specta::specta]
+pub async fn search(
+    manhuagui_client: State<'_, ManhuaguiClient>,
+    keyword: String,
+    page_num: i64,
+) -> CommandResult<SearchResult> {
+    let search_result = manhuagui_client
+        .search(&keyword, page_num)
+        .await
+        .context("搜索失败")?;
+    Ok(search_result)
 }
