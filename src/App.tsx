@@ -50,7 +50,8 @@ function App() {
   }, [])
 
   async function test() {
-    console.log(userProfile)
+    const result = await commands.search('魔王', 2)
+    console.log(result)
   }
 
   return (
