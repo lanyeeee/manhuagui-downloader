@@ -36,6 +36,9 @@ anyhow = { version = "1.0.91" }
 parking_lot = { version = "0.12.3", features = ["send_guard"] }
 scraper = { version = "0.22.0" }
 lz-str = { version = "0.2.1" }
+regex = { version = "1.11.1" }
+tokio = { version = "1.43.0", features = ["full"] }
+bytes = { version = "1.8.0" }
 
 [profile.release]
 strip = true

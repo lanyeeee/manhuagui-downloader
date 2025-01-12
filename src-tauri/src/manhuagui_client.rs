@@ -1,6 +1,7 @@
 use std::time::Duration;
 
 use anyhow::{anyhow, Context};
+use bytes::Bytes;
 use parking_lot::RwLock;
 use reqwest::StatusCode;
 use reqwest_middleware::ClientWithMiddleware;
@@ -10,19 +11,27 @@ use tauri::{AppHandle, Manager};
 
 use crate::{
     config::Config,
-    types::{Comic, SearchResult, UserProfile},
+    decrypt::decrypt,
+    types::{ChapterInfo, Comic, SearchResult, UserProfile},
 };
 
 #[derive(Clone)]
 pub struct ManhuaguiClient {
     app: AppHandle,
     api_client: ClientWithMiddleware,
+    img_client: ClientWithMiddleware,
 }
 
 impl ManhuaguiClient {
     pub fn new(app: AppHandle) -> Self {
         let api_client = create_api_client();
-        Self { app, api_client }
+        let img_client = create_img_client();
+
+        Self {
+            app,
+            api_client,
+            img_client,
+        }
     }
 
     pub async fn login(&self, username: &str, password: &str) -> anyhow::Result<String> {
@@ -109,6 +118,50 @@ impl ManhuaguiClient {
 
         Ok(comic)
     }
+
+    pub async fn get_image_urls(&self, chapter_info: &ChapterInfo) -> anyhow::Result<Vec<String>> {
+        let comic_id = chapter_info.comic_id;
+        let chapter_id = chapter_info.chapter_id;
+
+        let url = format!("https://www.manhuagui.com/comic/{comic_id}/{chapter_id}.html");
+        let http_resp = self.api_client.get(url).send().await?;
+        let status = http_resp.status();
+        let body = http_resp.text().await?;
+        if status != StatusCode::OK {
+            return Err(anyhow!("预料之外的状态码({status}): {body}"));
+        }
+
+        let decrypt_result = decrypt(&body).context("解密失败")?;
+
+        let urls = decrypt_result
+            .files
+            .iter()
+            .map(|file| format!("https://i.hamreus.com{}{file}", decrypt_result.path))
+            .map(|url| url.trim_end_matches(".webp").to_string())
+            .collect();
+
+        Ok(urls)
+    }
+
+    pub async fn get_image_bytes(&self, url: &str) -> anyhow::Result<Bytes> {
+        // 发送下载图片请求
+        let http_resp = self
+            .img_client
+            .get(url)
+            .header("referer", "https://www.manhuagui.com/")
+            .send()
+            .await?;
+        // 检查http响应状态码
+        let status = http_resp.status();
+        if status != StatusCode::OK {
+            let body = http_resp.text().await?;
+            return Err(anyhow!("预料之外的状态码({status}): {body}"));
+        }
+        // 读取图片数据
+        let image_data = http_resp.bytes().await?;
+
+        Ok(image_data)
+    }
 }
 
 fn create_api_client() -> ClientWithMiddleware {
@@ -122,6 +175,16 @@ fn create_api_client() -> ClientWithMiddleware {
         .redirect(reqwest::redirect::Policy::none())
         .build()
         .unwrap();
+
+    reqwest_middleware::ClientBuilder::new(client)
+        .with(RetryTransientMiddleware::new_with_policy(retry_policy))
+        .build()
+}
+
+fn create_img_client() -> ClientWithMiddleware {
+    let retry_policy = ExponentialBackoff::builder().build_with_max_retries(3);
+
+    let client = reqwest::ClientBuilder::new().build().unwrap();
 
     reqwest_middleware::ClientBuilder::new(client)
         .with(RetryTransientMiddleware::new_with_policy(retry_policy))

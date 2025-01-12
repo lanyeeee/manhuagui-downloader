@@ -50,12 +50,25 @@ async getComic(id: number) : Promise<Result<Comic, CommandError>> {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
+},
+async downloadChapters(chapters: ChapterInfo[]) : Promise<Result<null, CommandError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("download_chapters", { chapters }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
 }
 }
 
 /** user-defined events **/
 
 
+export const events = __makeEvents__<{
+downloadEvent: DownloadEvent
+}>({
+downloadEvent: "download-event"
+})
 
 /** user-defined constants **/
 
@@ -212,6 +225,7 @@ aliases: string[];
 intro: string }
 export type CommandError = string
 export type Config = { cookie: string; downloadDir: string }
+export type DownloadEvent = { event: "ChapterPending"; data: { chapterId: number; comicTitle: string; chapterTitle: string } } | { event: "ChapterControlRisk"; data: { chapterId: number; retryAfter: number } } | { event: "ChapterStart"; data: { chapterId: number; total: number } } | { event: "ChapterEnd"; data: { chapterId: number; errMsg: string | null } } | { event: "ImageSuccess"; data: { chapterId: number; url: string; current: number } } | { event: "ImageError"; data: { chapterId: number; url: string; errMsg: string } } | { event: "Speed"; data: { speed: string } }
 export type SearchResult = { comics: ComicInSearch[]; current: number; total: number }
 export type UserProfile = { username: string; avatar: string }
 

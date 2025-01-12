@@ -1,6 +1,9 @@
 mod commands;
 mod config;
+mod decrypt;
+mod download_manager;
 mod errors;
+mod events;
 mod extensions;
 mod manhuagui_client;
 mod types;
@@ -8,6 +11,8 @@ mod utils;
 
 use anyhow::Context;
 use config::Config;
+use download_manager::DownloadManager;
+use events::DownloadEvent;
 use manhuagui_client::ManhuaguiClient;
 use parking_lot::RwLock;
 use tauri::{Manager, Wry};
@@ -29,8 +34,9 @@ pub fn run() {
             get_user_profile,
             search,
             get_comic,
+            download_chapters,
         ])
-        .events(tauri_specta::collect_events![]);
+        .events(tauri_specta::collect_events![DownloadEvent]);
 
     #[cfg(debug_assertions)]
     builder
@@ -47,6 +53,8 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(builder.invoke_handler())
         .setup(move |app| {
+            builder.mount_events(app);
+
             let app_data_dir = app
                 .path()
                 .app_data_dir()
@@ -60,6 +68,9 @@ pub fn run() {
 
             let manhuagui_client = ManhuaguiClient::new(app.handle().clone());
             app.manage(manhuagui_client);
+
+            let download_manager = DownloadManager::new(app.handle());
+            app.manage(download_manager);
 
             Ok(())
         })
