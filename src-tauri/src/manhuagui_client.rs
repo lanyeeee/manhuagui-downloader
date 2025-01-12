@@ -10,7 +10,7 @@ use tauri::{AppHandle, Manager};
 
 use crate::{
     config::Config,
-    types::{SearchResult, UserProfile},
+    types::{Comic, SearchResult, UserProfile},
 };
 
 #[derive(Clone)]
@@ -92,6 +92,22 @@ impl ManhuaguiClient {
         let search_result =
             SearchResult::from_html(&body).context("将body转换为SearchResult失败")?;
         Ok(search_result)
+    }
+
+    pub async fn get_comic(&self, id: i64) -> anyhow::Result<Comic> {
+        let http_resp = self
+            .api_client
+            .get(format!("https://www.manhuagui.com/comic/{id}/"))
+            .send()
+            .await?;
+        let status = http_resp.status();
+        let body = http_resp.text().await?;
+        if status != StatusCode::OK {
+            return Err(anyhow!("预料之外的状态码({status}): {body}"));
+        }
+        let comic = Comic::from_html(&self.app, &body).context("将body转换为Comic失败")?;
+
+        Ok(comic)
     }
 }
 

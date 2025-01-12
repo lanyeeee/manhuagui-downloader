@@ -42,6 +42,14 @@ async search(keyword: string, pageNum: number) : Promise<Result<SearchResult, Co
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
+},
+async getComic(id: number) : Promise<Result<Comic, CommandError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("get_comic", { id }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
 }
 }
 
@@ -55,6 +63,104 @@ async search(keyword: string, pageNum: number) : Promise<Result<SearchResult, Co
 
 /** user-defined types **/
 
+export type ChapterInfo = { 
+/**
+ * 章节id
+ */
+chapterId: number; 
+/**
+ * 章节标题
+ */
+chapterTitle: string; 
+/**
+ * 此章节有多少页
+ */
+chapterSize: number; 
+/**
+ * 以order为前缀的章节标题
+ */
+prefixedChapterTitle: string; 
+/**
+ * 漫画id
+ */
+comicId: number; 
+/**
+ * 漫画标题
+ */
+comicTitle: string; 
+/**
+ * 组名(单话、单行本、番外篇)
+ */
+groupName: string; 
+/**
+ * 此章节对应的group有多少章节
+ */
+groupSize: number; 
+/**
+ * 此章节在group中的顺序
+ */
+order: number; 
+/**
+ * 漫画状态(连载中/已完结)
+ */
+comicStatus: string; 
+/**
+ * 是否已下载
+ */
+isDownloaded?: boolean | null }
+export type Comic = { 
+/**
+ * 漫画id
+ */
+id: number; 
+/**
+ * 漫画标题
+ */
+title: string; 
+/**
+ * 漫画副标题
+ */
+subtitle: string | null; 
+/**
+ * 封面链接
+ */
+cover: string; 
+/**
+ * 漫画状态(连载中/已完结)
+ */
+status: string; 
+/**
+ * 上次更新时间
+ */
+updateTime: string; 
+/**
+ * 出版年份
+ */
+year: number; 
+/**
+ * 地区
+ */
+region: string; 
+/**
+ * 类型
+ */
+genres: string[]; 
+/**
+ * 作者
+ */
+authors: string[]; 
+/**
+ * 漫画别名
+ */
+aliases: string[]; 
+/**
+ * 简介
+ */
+intro: string; 
+/**
+ * 组名(单话、单行本...)->章节信息
+ */
+groups: { [key in string]: ChapterInfo[] } }
 export type ComicInSearch = { 
 /**
  * 漫画id
