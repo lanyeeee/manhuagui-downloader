@@ -50,8 +50,17 @@ function App() {
   }, [])
 
   async function test() {
-    const result = await commands.getComic(20082)
-    console.log(result)
+    const comicResult = await commands.getComic(20082)
+    if (comicResult.status === 'error') {
+      notification.error({ message: '获取漫画信息失败', description: comicResult.error, duration: 0 })
+      return
+    }
+    const comic = comicResult.data
+    const downloadResult = await commands.downloadChapters([comic.groups['单话'][1]])
+    if (downloadResult.status === 'error') {
+      notification.error({ message: '下载失败', description: downloadResult.error, duration: 0 })
+      return
+    }
   }
 
   return (

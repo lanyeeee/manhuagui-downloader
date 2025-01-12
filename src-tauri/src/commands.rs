@@ -3,10 +3,7 @@ use parking_lot::RwLock;
 use tauri::{AppHandle, State};
 
 use crate::{
-    config::Config,
-    errors::CommandResult,
-    manhuagui_client::ManhuaguiClient,
-    types::{Comic, SearchResult, UserProfile},
+    config::Config, download_manager::DownloadManager, errors::CommandResult, manhuagui_client::ManhuaguiClient, types::{ChapterInfo, Comic, SearchResult, UserProfile}
 };
 
 #[tauri::command]
@@ -87,4 +84,16 @@ pub async fn get_comic(
         .await
         .context(format!("获取漫画`{id}`的信息失败"))?;
     Ok(comic)
+}
+
+#[tauri::command(async)]
+#[specta::specta]
+pub async fn download_chapters(
+    download_manager: State<'_, DownloadManager>,
+    chapters: Vec<ChapterInfo>,
+) -> CommandResult<()> {
+    for ep in chapters {
+        download_manager.submit_chapter(ep).await?;
+    }
+    Ok(())
 }
