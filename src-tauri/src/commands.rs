@@ -6,7 +6,7 @@ use crate::{
     config::Config,
     errors::CommandResult,
     manhuagui_client::ManhuaguiClient,
-    types::{SearchResult, UserProfile},
+    types::{Comic, SearchResult, UserProfile},
 };
 
 #[tauri::command]
@@ -74,4 +74,17 @@ pub async fn search(
         .await
         .context("搜索失败")?;
     Ok(search_result)
+}
+
+#[tauri::command(async)]
+#[specta::specta]
+pub async fn get_comic(
+    manhuagui_client: State<'_, ManhuaguiClient>,
+    id: i64,
+) -> CommandResult<Comic> {
+    let comic = manhuagui_client
+        .get_comic(id)
+        .await
+        .context(format!("获取漫画`{id}`的信息失败"))?;
+    Ok(comic)
 }

@@ -50,7 +50,7 @@ function App() {
   }, [])
 
   async function test() {
-    const result = await commands.search('魔王', 2)
+    const result = await commands.getComic(20082)
     console.log(result)
   }
 
