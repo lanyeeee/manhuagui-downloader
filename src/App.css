@@ -1,0 +1,20 @@
+body {
+    @apply m-0;
+}
+
+.ant-notification {
+    @apply whitespace-pre-wrap;
+}
+
+.ant-notification-notice-description {
+    @apply h-20 overflow-auto;
+}
+
+.ant-tabs-nav {
+    @apply important-mb-0;
+}
+
+.ant-tabs-content,
+.ant-tabs-tabpane {
+    @apply h-full;
+}
