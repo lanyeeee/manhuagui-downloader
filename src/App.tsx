@@ -1,105 +1,31 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import './App.css'
-import { commands, Config, UserProfile } from './bindings.ts'
-import { App as AntdApp, Avatar, Button, Input } from 'antd'
-import LoginDialog from './components/LoginDialog.tsx'
+import { commands, Config } from './bindings.ts'
+import { App as AntdApp, ConfigProvider } from 'antd'
+import zhCN from 'antd/es/locale/zh_CN'
+import AppContent from './AppContent.tsx'
 
 function App() {
-  const { message, notification } = AntdApp.useApp()
-
-  const hasRendered = useRef(false)
-
   const [config, setConfig] = useState<Config>()
-  // TODO: 把userProfile显示出来
-  const [userProfile, setUserProfile] = useState<UserProfile>()
-  const [loginDialogShowing, setLoginDialogShowing] = useState<boolean>(false)
-
   useEffect(() => {
-    if (hasRendered.current === false || config === undefined) {
-      return
+    // 屏蔽浏览器右键菜单
+    document.oncontextmenu = (event) => {
+      event.preventDefault()
     }
-
-    commands.saveConfig(config).then(async () => {
-      message.success('保存配置成功')
-    })
-  }, [config])
-
-  useEffect(() => {
-    if (hasRendered.current === false || config === undefined || config.cookie === '') {
-      return
-    }
-
-    commands.getUserProfile().then(async (result) => {
-      if (result.status === 'error') {
-        notification.error({ message: '获取用户信息失败', description: result.error, duration: 0 })
-        setUserProfile(undefined)
-        return
-      }
-
-      setUserProfile(result.data)
-      message.success('获取用户信息成功')
-    })
-  }, [config?.cookie])
-
-  useEffect(() => {
+    // 获取配置
     commands.getConfig().then((result) => {
       setConfig(result)
     })
-
-    hasRendered.current = true
   }, [])
 
-  async function test() {
-    const comicResult = await commands.getComic(20082)
-    if (comicResult.status === 'error') {
-      notification.error({ message: '获取漫画信息失败', description: comicResult.error, duration: 0 })
-      return
-    }
-    const comic = comicResult.data
-    const downloadResult = await commands.downloadChapters([comic.groups['单话'][1]])
-    if (downloadResult.status === 'error') {
-      notification.error({ message: '下载失败', description: downloadResult.error, duration: 0 })
-      return
-    }
-  }
-
-  return (
-    <>
-      {config !== undefined && (
-        <div className="h-full flex flex-col">
-          <div className="flex">
-            <Input
-              prefix="Cookie："
-              value={config.cookie}
-              onChange={(e) => setConfig({ ...config, cookie: e.target.value })}
-              allowClear={true}
-            />
-            <Button type="primary" onClick={() => setLoginDialogShowing(true)}>
-              账号登录
-            </Button>
-            <Button onClick={test}>测试用</Button>
-            {userProfile !== undefined && (
-              <div className="flex items-center">
-                <Avatar src={userProfile.avatar} />
-                <span className="whitespace-nowrap">{userProfile.username}</span>
-              </div>
-            )}
-          </div>
-
-          <LoginDialog
-            loginDialogShowing={loginDialogShowing}
-            setLoginDialogShowing={setLoginDialogShowing}
-            config={config}
-            setConfig={setConfig}
-          />
-        </div>
-      )}
-    </>
-  )
+  return <>{config !== undefined && <AppContent config={config} setConfig={setConfig} />}</>
 }
 
+// eslint-disable-next-line react/display-name
 export default () => (
   <AntdApp notification={{ placement: 'bottomRight', showProgress: true }}>
-    <App />
+    <ConfigProvider locale={zhCN}>
+      <App />
+    </ConfigProvider>
   </AntdApp>
 )
