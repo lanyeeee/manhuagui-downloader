@@ -14,6 +14,9 @@ importers:
       '@tauri-apps/plugin-opener':
         specifier: ^2
         version: 2.2.3
+      '@viselect/react':
+        specifier: ^3.7.0
+        version: 3.7.0(react@18.3.1)
       antd:
         specifier: ^5.23.0
         version: 5.23.0(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -988,6 +991,14 @@ packages:
     resolution: {integrity: sha512-02pRcVLfb5UUxMJwudnjS/0ZQdSlskjuXVHdpZpLBZCA8hhoru2uEOsPbUOBRNNMjDj6ld00pmgk/+im07M35Q==}
     peerDependencies:
       vite: ^2.9.0 || ^3.0.0-0 || ^4.0.0 || ^5.0.0-0 || ^6.0.0-0
+
+  '@viselect/react@3.7.0':
+    resolution: {integrity: sha512-ZuqXMh0hB1KdTUphgI9FWFZJgtPDHN0K/spCm3yoPRu2UnIz6e4zgbTH2SGJrqnC7Xln4Vzn4fgoJsz2beiKaA==}
+    peerDependencies:
+      react: '>=17.0.2'
+
+  '@viselect/vanilla@3.7.0':
+    resolution: {integrity: sha512-fqBYQ/LAVyMtckdnRIARSOf3cLqC2iT9WC2/tPj6aJWcbdLrXVyOfPvSEL+S5D10jacAkcM/AxqozjH70DtqkA==}
 
   '@vitejs/plugin-react@4.3.4':
     resolution: {integrity: sha512-SCCPBJtYLdE8PX/7ZQAs1QAZ8Jqwih+0VBLum1EGqmCCQal+MIUqLCzj3ZUy8ufbC0cAM4LRlSTm7IQJwWT4ug==}
@@ -3310,6 +3321,13 @@ snapshots:
       - rollup
       - supports-color
       - vue
+
+  '@viselect/react@3.7.0(react@18.3.1)':
+    dependencies:
+      '@viselect/vanilla': 3.7.0
+      react: 18.3.1
+
+  '@viselect/vanilla@3.7.0': {}
 
   '@vitejs/plugin-react@4.3.4(vite@6.0.7(jiti@2.4.2)(tsx@4.19.2))':
     dependencies:
