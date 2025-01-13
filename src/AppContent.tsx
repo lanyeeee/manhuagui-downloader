@@ -22,7 +22,7 @@ function AppContent({ config, setConfig }: Props) {
 
   const [userProfile, setUserProfile] = useState<UserProfile>()
   const [loginDialogShowing, setLoginDialogShowing] = useState<boolean>(false)
-  const [_pickedComic, setPickedComic] = useState<Comic>()
+  const [pickedComic, setPickedComic] = useState<Comic>()
 
   useEffect(() => {
     if (hasRendered.current === false || config === undefined) {
@@ -72,7 +72,7 @@ function AppContent({ config, setConfig }: Props) {
     {
       key: 'chapter',
       label: '章节详情',
-      children: <ChapterPane />,
+      children: <ChapterPane pickedComic={pickedComic} setPickedComic={setPickedComic} />,
     },
   ]
 
