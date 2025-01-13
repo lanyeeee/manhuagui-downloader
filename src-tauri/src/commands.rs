@@ -3,7 +3,11 @@ use parking_lot::RwLock;
 use tauri::{AppHandle, State};
 
 use crate::{
-    config::Config, download_manager::DownloadManager, errors::CommandResult, manhuagui_client::ManhuaguiClient, types::{ChapterInfo, Comic, SearchResult, UserProfile}
+    config::Config,
+    download_manager::DownloadManager,
+    errors::CommandResult,
+    manhuagui_client::ManhuaguiClient,
+    types::{ChapterInfo, Comic, SearchResult, UserProfile},
 };
 
 #[tauri::command]

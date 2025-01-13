@@ -39,6 +39,7 @@ lz-str = { version = "0.2.1" }
 regex = { version = "1.11.1" }
 tokio = { version = "1.43.0", features = ["full"] }
 bytes = { version = "1.8.0" }
+tauri-plugin-dialog = "2"
 
 [profile.release]
 strip = true
