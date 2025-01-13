@@ -111,7 +111,7 @@ function AppContent({ config, setConfig }: Props) {
           activeKey={currentTabName}
           onChange={(key) => setCurrentTabName(key as CurrentTabName)}
         />
-        <DownloadingPane />
+        <DownloadingPane className="h-full basis-1/2 overflow-auto" config={config} setConfig={setConfig} />
       </div>
 
       <LoginDialog
