@@ -58,6 +58,14 @@ async downloadChapters(chapters: ChapterInfo[]) : Promise<Result<null, CommandEr
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
+},
+async getFavorite(pageNum: number) : Promise<Result<GetFavoriteResult, CommandError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("get_favorite", { pageNum }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
 }
 }
 
@@ -174,6 +182,31 @@ intro: string;
  * 组名(单话、单行本...)->章节信息
  */
 groups: { [key in string]: ChapterInfo[] } }
+export type ComicInFavorite = { 
+/**
+ * 漫画id
+ */
+id: number; 
+/**
+ * 漫画标题
+ */
+title: string; 
+/**
+ * 漫画封面链接
+ */
+cover: string; 
+/**
+ * 最近更新时间，两种格式
+ * - 2024-12-13
+ * - x分钟前
+ */
+lastUpdate: string; 
+/**
+ * 上次阅读时间，两种格式
+ * - 2024-12-13
+ * - x分钟前
+ */
+lastRead: string }
 export type ComicInSearch = { 
 /**
  * 漫画id
@@ -226,6 +259,7 @@ intro: string }
 export type CommandError = string
 export type Config = { cookie: string; downloadDir: string }
 export type DownloadEvent = { event: "ChapterPending"; data: { chapterId: number; comicTitle: string; chapterTitle: string } } | { event: "ChapterControlRisk"; data: { chapterId: number; retryAfter: number } } | { event: "ChapterStart"; data: { chapterId: number; total: number } } | { event: "ChapterEnd"; data: { chapterId: number; errMsg: string | null } } | { event: "ImageSuccess"; data: { chapterId: number; url: string; current: number } } | { event: "ImageError"; data: { chapterId: number; url: string; errMsg: string } } | { event: "Speed"; data: { speed: string } }
+export type GetFavoriteResult = { comics: ComicInFavorite[]; current: number; total: number }
 export type SearchResult = { comics: ComicInSearch[]; current: number; total: number }
 export type UserProfile = { username: string; avatar: string }
 

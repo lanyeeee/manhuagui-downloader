@@ -59,7 +59,10 @@ function AppContent({ config, setConfig }: Props) {
     hasRendered.current = true
   }, [])
 
-  async function test() {}
+  async function test() {
+    const result = await commands.getFavorite(1)
+    console.log(result)
+  }
 
   const [currentTabName, setCurrentTabName] = useState<CurrentTabName>('search')
 
