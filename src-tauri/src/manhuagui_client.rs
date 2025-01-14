@@ -12,6 +12,7 @@ use tauri::{AppHandle, Manager};
 use crate::{
     config::Config,
     decrypt::decrypt,
+    extensions::SendWithTimeoutMsg,
     types::{ChapterInfo, Comic, SearchResult, UserProfile},
 };
 
@@ -46,7 +47,7 @@ impl ManhuaguiClient {
             .get("https://www.manhuagui.com/tools/submit_ajax.ashx")
             .query(&params)
             .form(&form)
-            .send()
+            .send_with_timeout_msg()
             .await?;
         // 检查http响应状态码
         let status = http_resp.status();
@@ -75,7 +76,7 @@ impl ManhuaguiClient {
             .api_client
             .get("https://www.manhuagui.com/user/center/index")
             .header("cookie", cookie)
-            .send()
+            .send_with_timeout_msg()
             .await?;
         // 检查http响应状态码
         let status = http_resp.status();
@@ -92,7 +93,7 @@ impl ManhuaguiClient {
 
     pub async fn search(&self, keyword: &str, page_num: i64) -> anyhow::Result<SearchResult> {
         let url = format!("https://www.manhuagui.com/s/{keyword}_p{page_num}.html");
-        let http_resp = self.api_client.get(url).send().await?;
+        let http_resp = self.api_client.get(url).send_with_timeout_msg().await?;
         let status = http_resp.status();
         let body = http_resp.text().await?;
         if status != StatusCode::OK {
@@ -107,7 +108,7 @@ impl ManhuaguiClient {
         let http_resp = self
             .api_client
             .get(format!("https://www.manhuagui.com/comic/{id}/"))
-            .send()
+            .send_with_timeout_msg()
             .await?;
         let status = http_resp.status();
         let body = http_resp.text().await?;
@@ -124,7 +125,7 @@ impl ManhuaguiClient {
         let chapter_id = chapter_info.chapter_id;
 
         let url = format!("https://www.manhuagui.com/comic/{comic_id}/{chapter_id}.html");
-        let http_resp = self.api_client.get(url).send().await?;
+        let http_resp = self.api_client.get(url).send_with_timeout_msg().await?;
         let status = http_resp.status();
         let body = http_resp.text().await?;
         if status != StatusCode::OK {
@@ -149,7 +150,7 @@ impl ManhuaguiClient {
             .img_client
             .get(url)
             .header("referer", "https://www.manhuagui.com/")
-            .send()
+            .send_with_timeout_msg()
             .await?;
         // 检查http响应状态码
         let status = http_resp.status();
