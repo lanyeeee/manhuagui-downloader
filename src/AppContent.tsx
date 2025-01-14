@@ -9,6 +9,7 @@ import ChapterPane from './panes/ChapterPane.tsx'
 import { path } from '@tauri-apps/api'
 import { appDataDir } from '@tauri-apps/api/path'
 import { revealItemInDir } from '@tauri-apps/plugin-opener'
+import FavoritePane from './panes/FavoritePane.tsx'
 
 interface Props {
   config: Config
@@ -71,6 +72,13 @@ function AppContent({ config, setConfig }: Props) {
       key: 'search',
       label: '漫画搜索',
       children: <SearchPane setPickedComic={setPickedComic} setCurrentTabName={setCurrentTabName} />,
+    },
+    {
+      key: 'favorite',
+      label: '漫画收藏',
+      children: (
+        <FavoritePane userProfile={userProfile} setPickedComic={setPickedComic} setCurrentTabName={setCurrentTabName} />
+      ),
     },
     {
       key: 'chapter',
