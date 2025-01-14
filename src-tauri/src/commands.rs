@@ -7,7 +7,7 @@ use crate::{
     download_manager::DownloadManager,
     errors::CommandResult,
     manhuagui_client::ManhuaguiClient,
-    types::{ChapterInfo, Comic, SearchResult, UserProfile},
+    types::{ChapterInfo, Comic, GetFavoriteResult, SearchResult, UserProfile},
 };
 
 #[tauri::command]
@@ -100,4 +100,17 @@ pub async fn download_chapters(
         download_manager.submit_chapter(ep).await?;
     }
     Ok(())
+}
+
+#[tauri::command(async)]
+#[specta::specta]
+pub async fn get_favorite(
+    manhuagui_client: State<'_, ManhuaguiClient>,
+    page_num: i64,
+) -> CommandResult<GetFavoriteResult> {
+    let get_favorite_result = manhuagui_client
+        .get_favorite(page_num)
+        .await
+        .context("获取收藏夹失败")?;
+    Ok(get_favorite_result)
 }

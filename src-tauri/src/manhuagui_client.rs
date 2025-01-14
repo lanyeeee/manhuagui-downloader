@@ -13,7 +13,7 @@ use crate::{
     config::Config,
     decrypt::decrypt,
     extensions::SendWithTimeoutMsg,
-    types::{ChapterInfo, Comic, SearchResult, UserProfile},
+    types::{ChapterInfo, Comic, GetFavoriteResult, SearchResult, UserProfile},
 };
 
 #[derive(Clone)]
@@ -162,6 +162,28 @@ impl ManhuaguiClient {
         let image_data = http_resp.bytes().await?;
 
         Ok(image_data)
+    }
+
+    pub async fn get_favorite(&self, page_num: i64) -> anyhow::Result<GetFavoriteResult> {
+        let cookie = self.app.state::<RwLock<Config>>().read().cookie.clone();
+        // 发送获取收藏夹请求
+        let url = format!("https://www.manhuagui.com/user/book/shelf/{page_num}");
+        let http_resp = self
+            .api_client
+            .get(url)
+            .header("cookie", cookie)
+            .send_with_timeout_msg()
+            .await?;
+        // 检查http响应状态码
+        let status = http_resp.status();
+        let body = http_resp.text().await?;
+        if status != StatusCode::OK {
+            return Err(anyhow!("预料之外的状态码({status}): {body}"));
+        }
+        // 解析html
+        let get_favorite_result =
+            GetFavoriteResult::from_html(&body).context("将body转换为GetFavoriteResult失败")?;
+        Ok(get_favorite_result)
     }
 }
 
