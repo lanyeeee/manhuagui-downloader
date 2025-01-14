@@ -61,7 +61,7 @@ function AppContent({ config, setConfig }: Props) {
   }, [])
 
   async function test() {
-    const result = await commands.getFavorite(1)
+    const result = await commands.getDownloadedComics()
     console.log(result)
   }
 

@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, path::Path};
 
 use anyhow::{anyhow, Context};
 use parking_lot::RwLock;
@@ -152,6 +152,31 @@ impl Comic {
             groups,
         })
     }
+
+    pub fn from_metadata(app: &AppHandle, metadata_path: &Path) -> anyhow::Result<Comic> {
+        let comic_json = std::fs::read_to_string(metadata_path).context(format!(
+            "从元数据转为Comic失败，读取元数据文件 {metadata_path:?} 失败"
+        ))?;
+        let mut comic = serde_json::from_str::<Comic>(&comic_json).context(format!(
+            "从元数据转为Comic失败，将 {metadata_path:?} 反序列化为Comic失败"
+        ))?;
+        // 这个comic中的is_downloaded字段是None，需要重新计算
+        for chapter_infos in comic.groups.values_mut() {
+            for chapter_info in chapter_infos.iter_mut() {
+                let comic_title = &comic.title;
+                let group_name = &chapter_info.group_name;
+                let prefixed_chapter_title = &chapter_info.prefixed_chapter_title;
+                let is_downloaded = ChapterInfo::get_is_downloaded(
+                    app,
+                    comic_title,
+                    group_name,
+                    prefixed_chapter_title,
+                );
+                chapter_info.is_downloaded = Some(is_downloaded);
+            }
+        }
+        Ok(comic)
+    }
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
@@ -180,6 +205,23 @@ pub struct ChapterInfo {
     /// 是否已下载
     #[serde(skip_serializing_if = "Option::is_none")]
     pub is_downloaded: Option<bool>,
+}
+
+impl ChapterInfo {
+    pub fn get_is_downloaded(
+        app: &AppHandle,
+        comic_title: &str,
+        group_name: &str,
+        prefixed_chapter_title: &str,
+    ) -> bool {
+        app.state::<RwLock<Config>>()
+            .read()
+            .download_dir
+            .join(comic_title)
+            .join(group_name)
+            .join(prefixed_chapter_title)
+            .exists()
+    }
 }
 
 fn get_title_and_subtitle(

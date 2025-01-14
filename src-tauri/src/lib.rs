@@ -37,6 +37,7 @@ pub fn run() {
             download_chapters,
             get_favorite,
             save_metadata,
+            get_downloaded_comics,
         ])
         .events(tauri_specta::collect_events![DownloadEvent]);
 
