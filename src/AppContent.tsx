@@ -10,6 +10,7 @@ import { path } from '@tauri-apps/api'
 import { appDataDir } from '@tauri-apps/api/path'
 import { revealItemInDir } from '@tauri-apps/plugin-opener'
 import FavoritePane from './panes/FavoritePane.tsx'
+import DownloadedPane from './panes/DownloadedPane.tsx'
 
 interface Props {
   config: Config
@@ -78,6 +79,17 @@ function AppContent({ config, setConfig }: Props) {
       label: '漫画收藏',
       children: (
         <FavoritePane userProfile={userProfile} setPickedComic={setPickedComic} setCurrentTabName={setCurrentTabName} />
+      ),
+    },
+    {
+      key: 'downloaded',
+      label: '本地库存',
+      children: (
+        <DownloadedPane
+          setPickedComic={setPickedComic}
+          currentTabName={currentTabName}
+          setCurrentTabName={setCurrentTabName}
+        />
       ),
     },
     {
