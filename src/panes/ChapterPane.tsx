@@ -64,6 +64,16 @@ function ChapterPane({ pickedComic, setPickedComic }: Props) {
       message.error('请先选择漫画')
       return
     }
+    // 创建下载任务前，先创建元数据
+    const saveMetadataResult = await commands.saveMetadata(pickedComic)
+    if (saveMetadataResult.status === 'error') {
+      notification.error({
+        message: '保存元数据失败',
+        description: saveMetadataResult.error,
+        duration: 0,
+      })
+      return
+    }
     // 下载没有下载过的且已勾选的章节
     const chapterToDownload = chapterInfos?.filter((c) => c.isDownloaded === false && checkedIds.has(c.chapterId))
     if (chapterToDownload === undefined) {
