@@ -2257,6 +2257,7 @@ dependencies = [
  "tauri-plugin-opener",
  "tauri-specta",
  "tokio",
+ "uuid",
  "yaserde",
  "zip",
 ]

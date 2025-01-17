@@ -1,13 +1,19 @@
-use std::{io::Write, path::PathBuf};
+use std::{
+    io::Write,
+    path::PathBuf,
+    sync::{atomic::AtomicU32, Arc},
+};
 
 use anyhow::{anyhow, Context};
 use parking_lot::RwLock;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use tauri::{AppHandle, Manager};
+use tauri_specta::Event;
 use zip::{write::SimpleFileOptions, ZipWriter};
 
 use crate::{
     config::Config,
+    events::ExportCbzEvent,
     types::{ChapterInfo, Comic, ComicInfo},
 };
 
@@ -37,6 +43,16 @@ pub fn cbz(app: &AppHandle, comic: Comic) -> anyhow::Result<()> {
         perform_indent: true,
         ..Default::default()
     };
+    let event_uuid = uuid::Uuid::new_v4().to_string();
+    // 发送开始导出cbz事件
+    let _ = ExportCbzEvent::Start {
+        uuid: event_uuid.clone(),
+        comic_title: comic.title,
+        total: downloaded_chapters.len() as u32,
+    }
+    .emit(app);
+    // 用来记录导出进度
+    let current = Arc::new(AtomicU32::new(0));
     // 并发处理
     let downloaded_chapters = downloaded_chapters.into_par_iter();
     downloaded_chapters.try_for_each(|chapter_info| -> anyhow::Result<()> {
@@ -105,13 +121,21 @@ pub fn cbz(app: &AppHandle, comic: Comic) -> anyhow::Result<()> {
         zip_writer
             .finish()
             .context(format!("{err_prefix}关闭`{zip_path:?}`失败"))?;
-
+        // 更新导出cbz的进度
+        let current = current.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+        // 发送导出cbz进度事件
+        let _ = ExportCbzEvent::Progress {
+            uuid: event_uuid.clone(),
+            current,
+        }
+        .emit(app);
         Ok(())
     })?;
+    // 发送导出cbz完成事件
+    let _ = ExportCbzEvent::End { uuid: event_uuid }.emit(app);
 
     Ok(())
 }
-
 fn get_chapter_export_dir(
     app: &AppHandle,
     chapter_info: &ChapterInfo,

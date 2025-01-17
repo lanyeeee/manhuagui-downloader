@@ -97,9 +97,11 @@ async exportCbz(comic: Comic) : Promise<Result<null, CommandError>> {
 
 
 export const events = __makeEvents__<{
-downloadEvent: DownloadEvent
+downloadEvent: DownloadEvent,
+exportCbzEvent: ExportCbzEvent
 }>({
-downloadEvent: "download-event"
+downloadEvent: "download-event",
+exportCbzEvent: "export-cbz-event"
 })
 
 /** user-defined constants **/
@@ -283,6 +285,7 @@ intro: string }
 export type CommandError = string
 export type Config = { cookie: string; downloadDir: string; exportDir: string }
 export type DownloadEvent = { event: "ChapterPending"; data: { chapterId: number; comicTitle: string; chapterTitle: string } } | { event: "ChapterControlRisk"; data: { chapterId: number; retryAfter: number } } | { event: "ChapterStart"; data: { chapterId: number; total: number } } | { event: "ChapterEnd"; data: { chapterId: number; errMsg: string | null } } | { event: "ImageSuccess"; data: { chapterId: number; url: string; current: number } } | { event: "ImageError"; data: { chapterId: number; url: string; errMsg: string } } | { event: "Speed"; data: { speed: string } }
+export type ExportCbzEvent = { event: "Start"; data: { uuid: string; comicTitle: string; total: number } } | { event: "Progress"; data: { uuid: string; current: number } } | { event: "End"; data: { uuid: string } }
 export type GetFavoriteResult = { comics: ComicInFavorite[]; current: number; total: number }
 export type SearchResult = { comics: ComicInSearch[]; current: number; total: number }
 export type UserProfile = { username: string; avatar: string }
