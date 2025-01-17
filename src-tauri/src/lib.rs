@@ -13,7 +13,7 @@ mod utils;
 use anyhow::Context;
 use config::Config;
 use download_manager::DownloadManager;
-use events::DownloadEvent;
+use events::{DownloadEvent, ExportCbzEvent};
 use manhuagui_client::ManhuaguiClient;
 use parking_lot::RwLock;
 use tauri::{Manager, Wry};
@@ -41,7 +41,7 @@ pub fn run() {
             get_downloaded_comics,
             export_cbz,
         ])
-        .events(tauri_specta::collect_events![DownloadEvent]);
+        .events(tauri_specta::collect_events![DownloadEvent, ExportCbzEvent]);
 
     #[cfg(debug_assertions)]
     builder
