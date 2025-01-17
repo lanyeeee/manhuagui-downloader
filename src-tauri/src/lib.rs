@@ -4,6 +4,7 @@ mod decrypt;
 mod download_manager;
 mod errors;
 mod events;
+mod export;
 mod extensions;
 mod manhuagui_client;
 mod types;
@@ -38,6 +39,7 @@ pub fn run() {
             get_favorite,
             save_metadata,
             get_downloaded_comics,
+            export_cbz,
         ])
         .events(tauri_specta::collect_events![DownloadEvent]);
 
