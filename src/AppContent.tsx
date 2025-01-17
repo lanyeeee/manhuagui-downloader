@@ -86,6 +86,8 @@ function AppContent({ config, setConfig }: Props) {
       label: '本地库存',
       children: (
         <DownloadedPane
+          config={config}
+          setConfig={setConfig}
           setPickedComic={setPickedComic}
           currentTabName={currentTabName}
           setCurrentTabName={setCurrentTabName}

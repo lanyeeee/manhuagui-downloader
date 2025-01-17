@@ -1,6 +1,6 @@
-import { Comic } from '../bindings.ts'
+import { Comic, commands } from '../bindings.ts'
 import { CurrentTabName } from '../types.ts'
-import { Card } from 'antd'
+import { App as AntdApp, Button, Card } from 'antd'
 import { useMemo } from 'react'
 
 interface GroupInfo {
@@ -16,6 +16,7 @@ interface Props {
 }
 
 function DownloadedComicCard({ comic, setPickedComic, setCurrentTabName }: Props) {
+  const { notification } = AntdApp.useApp()
   const groupInfos = useMemo(() => {
     const groups = comic.groups
 
@@ -35,6 +36,14 @@ function DownloadedComicCard({ comic, setPickedComic, setCurrentTabName }: Props
   function pickComic() {
     setPickedComic(comic)
     setCurrentTabName('chapter')
+  }
+
+  async function exportCbz() {
+    const result = await commands.exportCbz(comic)
+    if (result.status === 'error') {
+      notification.error({ message: '导出cbz失败', description: result.error, duration: 0 })
+      return
+    }
   }
 
   return (
@@ -60,6 +69,11 @@ function DownloadedComicCard({ comic, setPickedComic, setCurrentTabName }: Props
               {groupInfo.name}：{groupInfo.downloaded}/{groupInfo.total}
             </span>
           ))}
+          <div className="flex ml-auto mt-auto gap-col-2">
+            <Button className="ml-auto mt-auto" size="small" onClick={exportCbz}>
+              导出cbz
+            </Button>
+          </div>
         </div>
       </div>
     </Card>
