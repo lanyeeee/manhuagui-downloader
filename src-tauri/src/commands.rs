@@ -6,6 +6,7 @@ use crate::{
     config::Config,
     download_manager::DownloadManager,
     errors::CommandResult,
+    export,
     manhuagui_client::ManhuaguiClient,
     types::{ChapterInfo, Comic, GetFavoriteResult, SearchResult, UserProfile},
 };
@@ -179,4 +180,13 @@ pub fn get_downloaded_comics(
         .collect::<Vec<_>>();
 
     Ok(downloaded_comics)
+}
+
+#[tauri::command(async)]
+#[specta::specta]
+#[allow(clippy::needless_pass_by_value)]
+pub fn export_cbz(app: AppHandle, comic: Comic) -> CommandResult<()> {
+    let comic_title = comic.title.clone();
+    export::cbz(&app, comic).context(format!("漫画`{comic_title}`导出cbz失败"))?;
+    Ok(())
 }

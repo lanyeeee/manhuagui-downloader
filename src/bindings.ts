@@ -82,6 +82,14 @@ async getDownloadedComics() : Promise<Result<Comic[], CommandError>> {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
+},
+async exportCbz(comic: Comic) : Promise<Result<null, CommandError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("export_cbz", { comic }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
 }
 }
 
@@ -273,7 +281,7 @@ aliases: string[];
  */
 intro: string }
 export type CommandError = string
-export type Config = { cookie: string; downloadDir: string }
+export type Config = { cookie: string; downloadDir: string; exportDir: string }
 export type DownloadEvent = { event: "ChapterPending"; data: { chapterId: number; comicTitle: string; chapterTitle: string } } | { event: "ChapterControlRisk"; data: { chapterId: number; retryAfter: number } } | { event: "ChapterStart"; data: { chapterId: number; total: number } } | { event: "ChapterEnd"; data: { chapterId: number; errMsg: string | null } } | { event: "ImageSuccess"; data: { chapterId: number; url: string; current: number } } | { event: "ImageError"; data: { chapterId: number; url: string; errMsg: string } } | { event: "Speed"; data: { speed: string } }
 export type GetFavoriteResult = { comics: ComicInFavorite[]; current: number; total: number }
 export type SearchResult = { comics: ComicInSearch[]; current: number; total: number }
