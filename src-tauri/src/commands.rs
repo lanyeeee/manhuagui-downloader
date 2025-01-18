@@ -1,11 +1,15 @@
+use std::collections::HashMap;
+
 use anyhow::Context;
 use parking_lot::RwLock;
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Manager, State};
+use tauri_specta::Event;
 
 use crate::{
     config::Config,
     download_manager::DownloadManager,
     errors::CommandResult,
+    events::UpdateDownloadedComicsEvent,
     export,
     manhuagui_client::ManhuaguiClient,
     types::{ChapterInfo, Comic, GetFavoriteResult, SearchResult, UserProfile},
@@ -197,5 +201,73 @@ pub fn export_cbz(app: AppHandle, comic: Comic) -> CommandResult<()> {
 pub fn export_pdf(app: AppHandle, comic: Comic) -> CommandResult<()> {
     let comic_title = comic.title.clone();
     export::pdf(&app, comic).context(format!("漫画`{comic_title}`导出pdf失败"))?;
+    Ok(())
+}
+
+#[allow(clippy::cast_possible_wrap)]
+#[tauri::command(async)]
+#[specta::specta]
+pub async fn update_downloaded_comics(
+    app: AppHandle,
+    download_manager: State<'_, DownloadManager>,
+) -> CommandResult<()> {
+    // 从下载目录中获取已下载的漫画
+    let downloaded_comics = get_downloaded_comics(app.clone(), app.state::<RwLock<Config>>())?;
+    // 用于存储最新的漫画信息
+    let mut latest_comics = Vec::new();
+    // 发送正在获取漫画事件
+    let total = downloaded_comics.len() as i64;
+    let _ = UpdateDownloadedComicsEvent::GettingComics { total }.emit(&app);
+    // 获取已下载漫画的最新信息，不用并发是有意为之，防止被封IP
+    for (i, downloaded_comic) in downloaded_comics.iter().enumerate() {
+        // 获取最新的漫画信息
+        let comic = get_comic(app.state::<ManhuaguiClient>(), downloaded_comic.id).await?;
+        // 将最新的漫画信息保存到元数据文件
+        save_metadata(app.state::<RwLock<Config>>(), comic.clone())?;
+
+        latest_comics.push(comic);
+        // 发送获取到漫画事件
+        let current = i as i64 + 1;
+        let _ = UpdateDownloadedComicsEvent::ComicGot { current, total }.emit(&app);
+    }
+    // 至此，已下载的漫画的最新信息已获取完毕
+    let chapters_to_download = latest_comics
+        .into_iter()
+        .filter_map(|comic| {
+            // 先过滤出每个漫画中至少有一个已下载章节的组
+            let downloaded_group = comic
+                .groups
+                .into_iter()
+                .filter_map(|(group_name, chapter_infos)| {
+                    // 检查当前组是否有已下载章节，如果有，则返回组路径和章节信息，否则返回None(跳过)
+                    chapter_infos
+                        .iter()
+                        .any(|chapter_info| chapter_info.is_downloaded.unwrap_or(false))
+                        .then_some((group_name, chapter_infos))
+                })
+                .collect::<HashMap<_, _>>();
+            // 如果所有组都没有已下载章节，则跳过
+            if downloaded_group.is_empty() {
+                return None;
+            }
+            Some(downloaded_group)
+        })
+        .flat_map(|downloaded_groups| {
+            // 从至少有一个已下载章节的组中过滤出其中未下载的章节
+            downloaded_groups
+                .into_values()
+                .flat_map(|chapter_infos| {
+                    chapter_infos
+                        .into_iter()
+                        .filter(|chapter_info| !chapter_info.is_downloaded.unwrap_or(false))
+                })
+                .collect::<Vec<_>>()
+        })
+        .collect::<Vec<_>>();
+    // 下载未下载章节
+    download_chapters(download_manager, chapters_to_download).await?;
+    // 发送下载任务创建完成事件
+    let _ = UpdateDownloadedComicsEvent::DownloadTaskCreated.emit(&app);
+
     Ok(())
 }
