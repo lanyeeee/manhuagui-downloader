@@ -90,6 +90,14 @@ async exportCbz(comic: Comic) : Promise<Result<null, CommandError>> {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
+},
+async exportPdf(comic: Comic) : Promise<Result<null, CommandError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("export_pdf", { comic }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
 }
 }
 
@@ -98,10 +106,12 @@ async exportCbz(comic: Comic) : Promise<Result<null, CommandError>> {
 
 export const events = __makeEvents__<{
 downloadEvent: DownloadEvent,
-exportCbzEvent: ExportCbzEvent
+exportCbzEvent: ExportCbzEvent,
+exportPdfEvent: ExportPdfEvent
 }>({
 downloadEvent: "download-event",
-exportCbzEvent: "export-cbz-event"
+exportCbzEvent: "export-cbz-event",
+exportPdfEvent: "export-pdf-event"
 })
 
 /** user-defined constants **/
@@ -286,6 +296,7 @@ export type CommandError = string
 export type Config = { cookie: string; downloadDir: string; exportDir: string }
 export type DownloadEvent = { event: "ChapterPending"; data: { chapterId: number; comicTitle: string; chapterTitle: string } } | { event: "ChapterControlRisk"; data: { chapterId: number; retryAfter: number } } | { event: "ChapterStart"; data: { chapterId: number; total: number } } | { event: "ChapterEnd"; data: { chapterId: number; errMsg: string | null } } | { event: "ImageSuccess"; data: { chapterId: number; url: string; current: number } } | { event: "ImageError"; data: { chapterId: number; url: string; errMsg: string } } | { event: "Speed"; data: { speed: string } }
 export type ExportCbzEvent = { event: "Start"; data: { uuid: string; comicTitle: string; total: number } } | { event: "Progress"; data: { uuid: string; current: number } } | { event: "End"; data: { uuid: string } }
+export type ExportPdfEvent = { event: "CreateStart"; data: { uuid: string; comicTitle: string; total: number } } | { event: "CreateProgress"; data: { uuid: string; current: number } } | { event: "CreateEnd"; data: { uuid: string } } | { event: "MergeStart"; data: { uuid: string; comicTitle: string; total: number } } | { event: "MergeProgress"; data: { uuid: string; current: number } } | { event: "MergeEnd"; data: { uuid: string } }
 export type GetFavoriteResult = { comics: ComicInFavorite[]; current: number; total: number }
 export type SearchResult = { comics: ComicInSearch[]; current: number; total: number }
 export type UserProfile = { username: string; avatar: string }
