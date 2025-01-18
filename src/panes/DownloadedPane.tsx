@@ -59,6 +59,7 @@ function DownloadedPane({ config, setConfig, setPickedComic, currentTabName, set
     let mounted = true
     let unListenExportCbzEvent: () => void | undefined
     let unListenExportPdfEvent: () => void | undefined
+    let unListenUpdateEvents: () => void | undefined
 
     events.exportCbzEvent
       .listen(async ({ payload: exportCbzEvent }) => {
@@ -165,10 +166,42 @@ function DownloadedPane({ config, setConfig, setPickedComic, currentTabName, set
         }
       })
 
+    events.updateDownloadedComicsEvent
+      .listen(async ({ payload: updateEvent }) => {
+        if (updateEvent.event === 'GettingComics') {
+          const { total } = updateEvent.data
+          messageRef.current.loading({
+            key: 'updateDownloadedComics',
+            content: `正在获取已下载漫画的最新数据(0/${total})`,
+            duration: 0,
+          })
+        } else if (updateEvent.event === 'ComicGot') {
+          const { current, total } = updateEvent.data
+          messageRef.current.loading({
+            key: 'updateDownloadedComics',
+            content: `正在获取已下载漫画的最新数据(${current}/${total})`,
+            duration: 0,
+          })
+        } else if (updateEvent.event === 'DownloadTaskCreated') {
+          messageRef.current.success({
+            key: 'updateDownloadedComics',
+            content: '已为需要更新的章节创建下载任务',
+          })
+        }
+      })
+      .then((unListenFn) => {
+        if (mounted) {
+          unListenUpdateEvents = unListenFn
+        } else {
+          unListenFn()
+        }
+      })
+
     return () => {
       mounted = false
       unListenExportCbzEvent?.()
       unListenExportPdfEvent?.()
+      unListenUpdateEvents?.()
     }
   }, [])
 
@@ -185,12 +218,23 @@ function DownloadedPane({ config, setConfig, setPickedComic, currentTabName, set
     })
   }
 
+  // 更新已下载漫画
+  async function updateDownloadedComics() {
+    const result = await commands.updateDownloadedComics()
+    if (result.status === 'error') {
+      notification.error({ message: '更新已下载漫画失败', description: result.error, duration: 0 })
+    }
+  }
+
   return (
     <div className="h-full flex flex-col overflow-auto">
       <div className="flex gap-col-1">
         <Input value={config.exportDir} prefix="导出目录" size="small" readOnly onClick={selectExportDir} />
         <Button size="small" onClick={() => revealItemInDir(config.exportDir)}>
           打开目录
+        </Button>
+        <Button size="small" onClick={updateDownloadedComics}>
+          更新库存
         </Button>
       </div>
       <div className="h-full flex flex-col gap-row-1 overflow-auto">
