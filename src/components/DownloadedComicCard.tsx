@@ -46,6 +46,14 @@ function DownloadedComicCard({ comic, setPickedComic, setCurrentTabName }: Props
     }
   }
 
+  async function exportPdf() {
+    const result = await commands.exportPdf(comic)
+    if (result.status === 'error') {
+      notification.error({ message: '导出pdf失败', description: result.error, duration: 0 })
+      return
+    }
+  }
+
   return (
     <Card hoverable={true} className="cursor-auto m-0! rounded-none" styles={{ body: { padding: '0.25rem' } }}>
       <div className="flex">
@@ -72,6 +80,9 @@ function DownloadedComicCard({ comic, setPickedComic, setCurrentTabName }: Props
           <div className="flex ml-auto mt-auto gap-col-2">
             <Button className="ml-auto mt-auto" size="small" onClick={exportCbz}>
               导出cbz
+            </Button>
+            <Button className="ml-auto mt-auto" size="small" onClick={exportPdf}>
+              导出pdf
             </Button>
           </div>
         </div>
