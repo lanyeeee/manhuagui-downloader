@@ -62,7 +62,7 @@ function AppContent({ config, setConfig }: Props) {
   }, [])
 
   async function test() {
-    const result = await commands.exportCbz(pickedComic!)
+    const result = await commands.exportPdf(pickedComic!)
     console.log(result)
   }
 
