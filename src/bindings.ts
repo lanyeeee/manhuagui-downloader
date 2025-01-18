@@ -98,6 +98,14 @@ async exportPdf(comic: Comic) : Promise<Result<null, CommandError>> {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
+},
+async updateDownloadedComics() : Promise<Result<null, CommandError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("update_downloaded_comics") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
 }
 }
 
@@ -107,11 +115,13 @@ async exportPdf(comic: Comic) : Promise<Result<null, CommandError>> {
 export const events = __makeEvents__<{
 downloadEvent: DownloadEvent,
 exportCbzEvent: ExportCbzEvent,
-exportPdfEvent: ExportPdfEvent
+exportPdfEvent: ExportPdfEvent,
+updateDownloadedComicsEvent: UpdateDownloadedComicsEvent
 }>({
 downloadEvent: "download-event",
 exportCbzEvent: "export-cbz-event",
-exportPdfEvent: "export-pdf-event"
+exportPdfEvent: "export-pdf-event",
+updateDownloadedComicsEvent: "update-downloaded-comics-event"
 })
 
 /** user-defined constants **/
@@ -299,6 +309,7 @@ export type ExportCbzEvent = { event: "Start"; data: { uuid: string; comicTitle:
 export type ExportPdfEvent = { event: "CreateStart"; data: { uuid: string; comicTitle: string; total: number } } | { event: "CreateProgress"; data: { uuid: string; current: number } } | { event: "CreateEnd"; data: { uuid: string } } | { event: "MergeStart"; data: { uuid: string; comicTitle: string; total: number } } | { event: "MergeProgress"; data: { uuid: string; current: number } } | { event: "MergeEnd"; data: { uuid: string } }
 export type GetFavoriteResult = { comics: ComicInFavorite[]; current: number; total: number }
 export type SearchResult = { comics: ComicInSearch[]; current: number; total: number }
+export type UpdateDownloadedComicsEvent = { event: "GettingComics"; data: { total: number } } | { event: "ComicGot"; data: { current: number; total: number } } | { event: "DownloadTaskCreated" }
 export type UserProfile = { username: string; avatar: string }
 
 /** tauri-specta globals **/
