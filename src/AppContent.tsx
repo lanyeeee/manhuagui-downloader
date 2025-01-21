@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Comic, commands, Config, UserProfile } from './bindings.ts'
 import { App as AntdApp, Avatar, Button, Input, Tabs, TabsProps } from 'antd'
 import LoginDialog from './components/LoginDialog.tsx'
@@ -20,14 +20,12 @@ interface Props {
 function AppContent({ config, setConfig }: Props) {
   const { message, notification } = AntdApp.useApp()
 
-  const hasRendered = useRef(false)
-
   const [userProfile, setUserProfile] = useState<UserProfile>()
   const [loginDialogShowing, setLoginDialogShowing] = useState<boolean>(false)
   const [pickedComic, setPickedComic] = useState<Comic>()
 
   useEffect(() => {
-    if (hasRendered.current === false || config === undefined) {
+    if (config === undefined) {
       return
     }
 
@@ -37,7 +35,7 @@ function AppContent({ config, setConfig }: Props) {
   }, [config, message])
 
   useEffect(() => {
-    if (hasRendered.current === false || config.cookie === '') {
+    if (config.cookie === '') {
       return
     }
 
@@ -56,10 +54,6 @@ function AppContent({ config, setConfig }: Props) {
       message.success('获取用户信息成功')
     })
   }, [config.cookie, message, notification])
-
-  useEffect(() => {
-    hasRendered.current = true
-  }, [])
 
   async function revealConfigPath() {
     try {
