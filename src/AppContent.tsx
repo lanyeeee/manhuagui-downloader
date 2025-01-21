@@ -61,6 +61,28 @@ function AppContent({ config, setConfig }: Props) {
     hasRendered.current = true
   }, [])
 
+  async function revealConfigPath() {
+    try {
+      const configPath = await path.join(await appDataDir(), 'config.json')
+      await revealItemInDir(configPath)
+    } catch (error) {
+      if (typeof error === 'string') {
+        notification.error({
+          message: '打开配置目录失败',
+          description: `打开配置目录失败: ${error}`,
+          duration: 0,
+        })
+      } else {
+        notification.error({
+          message: '打开配置目录失败',
+          description: `打开配置目录失败，请联系开发者`,
+          duration: 0,
+        })
+        console.error(error)
+      }
+    }
+  }
+
   async function test() {
     const result = await commands.updateDownloadedComics()
     console.log(result)
@@ -113,13 +135,7 @@ function AppContent({ config, setConfig }: Props) {
         <Button type="primary" onClick={() => setLoginDialogShowing(true)}>
           账号登录
         </Button>
-        <Button
-          onClick={async () => {
-            const configPath = await path.join(await appDataDir(), 'config.json')
-            await revealItemInDir(configPath)
-          }}>
-          打开配置目录
-        </Button>
+        <Button onClick={revealConfigPath}>打开配置目录</Button>
         <Button onClick={test}>测试用</Button>
         {userProfile !== undefined && (
           <div className="flex items-center">

@@ -226,11 +226,32 @@ function DownloadedPane({ config, setConfig, setPickedComic, currentTabName, set
     }
   }
 
+  async function revealExportDir() {
+    try {
+      await revealItemInDir(config.exportDir)
+    } catch (error) {
+      if (typeof error === 'string') {
+        notification.error({
+          message: '打开导出目录失败',
+          description: `打开导出目录"${config.exportDir}"失败: ${error}`,
+          duration: 0,
+        })
+      } else {
+        notification.error({
+          message: '打开导出目录失败',
+          description: `打开导出目录"${config.exportDir}"失败，请联系开发者`,
+          duration: 0,
+        })
+        console.error(error)
+      }
+    }
+  }
+
   return (
     <div className="h-full flex flex-col overflow-auto">
       <div className="flex gap-col-1">
         <Input value={config.exportDir} prefix="导出目录" size="small" readOnly onClick={selectExportDir} />
-        <Button size="small" onClick={() => revealItemInDir(config.exportDir)}>
+        <Button size="small" onClick={revealExportDir}>
           打开目录
         </Button>
         <Button size="small" onClick={updateDownloadedComics}>
