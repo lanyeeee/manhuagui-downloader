@@ -163,12 +163,7 @@ impl DownloadManager {
         // 等待所有下载任务完成
         join_set.join_all().await;
         // 每个章节下载完成后，等待一段时间再下载下一个章节
-        let download_interval_sec = self
-            .app
-            .state::<RwLock<Config>>()
-            .read()
-            .download_interval_sec;
-        sleep(Duration::from_secs(download_interval_sec)).await;
+        self.sleep_between_chapters(chapter_id).await;
         drop(permit);
         // 检查此章节的图片是否全部下载成功
         let downloaded_count = downloaded_count.load(Ordering::Relaxed);
@@ -197,6 +192,24 @@ impl DownloadManager {
             err_msg,
         }
         .emit(&self.app);
+    }
+
+    async fn sleep_between_chapters(&self, chapter_id: i64) {
+        let mut remaining_sec = self
+            .app
+            .state::<RwLock<Config>>()
+            .read()
+            .download_interval_sec;
+        while remaining_sec > 0 {
+            // 发送章节休眠事件
+            let _ = DownloadEvent::ChapterSleeping {
+                chapter_id,
+                remaining_sec,
+            }
+            .emit(&self.app);
+            sleep(Duration::from_secs(1)).await;
+            remaining_sec -= 1;
+        }
     }
 
     async fn download_image(
