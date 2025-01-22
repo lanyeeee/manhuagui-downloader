@@ -3,6 +3,7 @@ import { Config, events } from '../bindings.ts'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { revealItemInDir } from '@tauri-apps/plugin-opener'
 import { open } from '@tauri-apps/plugin-dialog'
+import SettingsDialog from '../components/SettingsDialog.tsx'
 
 type ProgressData = {
   comicTitle: string
@@ -23,6 +24,7 @@ function DownloadingPane({ className, config, setConfig }: Props) {
   const { notification } = AntdApp.useApp()
   const [progresses, setProgresses] = useState<Map<number, ProgressData>>(new Map())
   const [downloadSpeed, setDownloadSpeed] = useState<string>()
+  const [settingsDialogShowing, setSettingsDialogShowing] = useState<boolean>(false)
   const sortedProgresses = useMemo(
     () =>
       Array.from(progresses.entries()).sort((a, b) => {
@@ -57,7 +59,7 @@ function DownloadingPane({ className, config, setConfig }: Props) {
             current: 0,
             total: 0,
             percentage: 0,
-            indicator: '',
+            indicator: '等待中',
           }
           setProgresses((prev) => new Map(prev).set(chapterId, progressData))
         } else if (downloadEvent.event == 'ChapterStart') {
@@ -68,7 +70,18 @@ function DownloadingPane({ className, config, setConfig }: Props) {
               return prev
             }
             const next = new Map(prev)
-            next.set(chapterId, { ...progressData, total })
+            next.set(chapterId, { ...progressData, total, indicator: `0/${total}` })
+            return new Map(next)
+          })
+        } else if (downloadEvent.event === 'ChapterSleeping') {
+          const { chapterId, remainingSec } = downloadEvent.data
+          setProgresses((prev) => {
+            const progressData = prev.get(chapterId)
+            if (progressData === undefined) {
+              return prev
+            }
+            const next = new Map(prev)
+            next.set(chapterId, { ...progressData, indicator: `将在${remainingSec}秒后继续下载` })
             return new Map(next)
           })
         } else if (downloadEvent.event == 'ChapterEnd') {
@@ -98,7 +111,7 @@ function DownloadingPane({ className, config, setConfig }: Props) {
             }
             const next = new Map(prev)
             const percentage = Math.round((current / progressData.total) * 100)
-            next.set(chapterId, { ...progressData, current, percentage })
+            next.set(chapterId, { ...progressData, current, percentage, indicator: `${current}/${progressData.total}` })
             return new Map(next)
           })
         } else if (downloadEvent.event == 'ImageError') {
@@ -173,10 +186,19 @@ function DownloadingPane({ className, config, setConfig }: Props) {
         <Button size="small" onClick={revealDownloadDir}>
           打开目录
         </Button>
+        <Button size="small" onClick={() => setSettingsDialogShowing(true)}>
+          更多设置
+        </Button>
+        <SettingsDialog
+          settingsDialogShowing={settingsDialogShowing}
+          setSettingsDialogShowing={setSettingsDialogShowing}
+          config={config}
+          setConfig={setConfig}
+        />
       </div>
       <span>下载速度: {downloadSpeed}</span>
       <div className="overflow-auto">
-        {sortedProgresses.map(([chapterId, { comicTitle, chapterTitle, percentage, current, total }]) => (
+        {sortedProgresses.map(([chapterId, { comicTitle, chapterTitle, percentage, total, indicator }]) => (
           <div className="grid grid-cols-[1fr_1fr_2fr]" key={chapterId}>
             <span className="mb-1! text-ellipsis whitespace-nowrap overflow-hidden" title={comicTitle}>
               {comicTitle}
@@ -184,7 +206,7 @@ function DownloadingPane({ className, config, setConfig }: Props) {
             <span className="mb-1! text-ellipsis whitespace-nowrap overflow-hidden" title={chapterTitle}>
               {chapterTitle}
             </span>
-            <DownloadingProgress total={total} percentage={percentage} current={current} />
+            <DownloadingProgress total={total} percentage={percentage} indicator={indicator} />
           </div>
         ))}
       </div>
@@ -195,14 +217,14 @@ function DownloadingPane({ className, config, setConfig }: Props) {
 interface DownloadingProgressProps {
   total: number
   percentage: number
-  current: number
+  indicator: string
 }
 
-function DownloadingProgress({ total, percentage, current }: DownloadingProgressProps) {
+function DownloadingProgress({ total, percentage, indicator }: DownloadingProgressProps) {
   if (total === 0) {
     return <span className="mb-1! text-ellipsis whitespace-nowrap overflow-hidden">等待中</span>
   } else {
-    return <Progress percent={percentage} format={() => `${current}/${total}`} />
+    return <Progress percent={percentage} format={() => indicator} />
   }
 }
 
