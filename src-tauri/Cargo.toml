@@ -31,7 +31,7 @@ specta-util = { version = "0.0.7", features = ["export"] }
 tauri-specta = { version = "2.0.0-rc", features = ["derive", "typescript"] }
 specta-typescript = { version = "0.0.7" }
 
-reqwest = { version = "0.12.9" }
+reqwest = { version = "0.12.9", default-features = false }
 reqwest-retry = { version = "0.7.0" }
 reqwest-middleware = { version = "0.4.0" }
 
