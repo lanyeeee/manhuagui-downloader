@@ -37,8 +37,8 @@ function FavoritePane({ userProfile, setPickedComic, setCurrentTabName }: Props)
   return (
     <div className="h-full flex flex-col">
       {getFavoriteResult && (
-        <div className="h-full flex flex-col gap-row-1 overflow-auto p-2">
-          <div className="h-full flex flex-col gap-row-2 overflow-auto pr-2 pb-2">
+        <div className="h-full flex flex-col gap-row-1 overflow-auto">
+          <div className="h-full flex flex-col gap-row-2 overflow-auto p-2">
             {getFavoriteResult.comics.map((comic) => (
               <ComicCard
                 key={comic.id}
