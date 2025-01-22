@@ -11,6 +11,7 @@ use anyhow::{anyhow, Context};
 use parking_lot::RwLock;
 use tauri::{AppHandle, Manager};
 use tauri_specta::Event;
+use tokio::time::sleep;
 use tokio::{
     sync::{mpsc, Semaphore},
     task::JoinSet,
@@ -46,7 +47,7 @@ impl DownloadManager {
             app: app.clone(),
             sender: Arc::new(sender),
             chapter_sem: Arc::new(Semaphore::new(1)),
-            img_sem: Arc::new(Semaphore::new(1)),
+            img_sem: Arc::new(Semaphore::new(10)),
             byte_per_sec: Arc::new(AtomicU64::new(0)),
         };
 
@@ -161,6 +162,13 @@ impl DownloadManager {
         }
         // 等待所有下载任务完成
         join_set.join_all().await;
+        // 每个章节下载完成后，等待一段时间再下载下一个章节
+        let download_interval_sec = self
+            .app
+            .state::<RwLock<Config>>()
+            .read()
+            .download_interval_sec;
+        sleep(Duration::from_secs(download_interval_sec)).await;
         drop(permit);
         // 检查此章节的图片是否全部下载成功
         let downloaded_count = downloaded_count.load(Ordering::Relaxed);
