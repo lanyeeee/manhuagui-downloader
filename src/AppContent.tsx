@@ -56,20 +56,20 @@ function AppContent({ config, setConfig }: Props) {
   }, [config.cookie, message, notification])
 
   async function revealConfigPath() {
+    const configPath = await path.join(await appDataDir(), 'config.json')
     try {
-      const configPath = await path.join(await appDataDir(), 'config.json')
       await revealItemInDir(configPath)
     } catch (error) {
       if (typeof error === 'string') {
         notification.error({
           message: '打开配置目录失败',
-          description: `打开配置目录失败: ${error}`,
+          description: `打开配置目录"${configPath}失败: ${error}`,
           duration: 0,
         })
       } else {
         notification.error({
           message: '打开配置目录失败',
-          description: `打开配置目录失败，请联系开发者`,
+          description: `打开配置目录"${configPath}失败，请联系开发者`,
           duration: 0,
         })
         console.error(error)
