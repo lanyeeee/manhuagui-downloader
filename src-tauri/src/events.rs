@@ -13,9 +13,6 @@ pub enum DownloadEvent {
     },
 
     #[serde(rename_all = "camelCase")]
-    ChapterControlRisk { chapter_id: i64, retry_after: u32 },
-
-    #[serde(rename_all = "camelCase")]
     ChapterStart { chapter_id: i64, total: u32 },
 
     #[serde(rename_all = "camelCase")]

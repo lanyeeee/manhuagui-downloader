@@ -11,7 +11,6 @@ type ProgressData = {
   total: number
   percentage: number
   indicator: string
-  retryAfter: number
 }
 
 interface Props {
@@ -59,20 +58,8 @@ function DownloadingPane({ className, config, setConfig }: Props) {
             total: 0,
             percentage: 0,
             indicator: '',
-            retryAfter: 0,
           }
           setProgresses((prev) => new Map(prev).set(chapterId, progressData))
-        } else if (downloadEvent.event == 'ChapterControlRisk') {
-          const { chapterId, retryAfter } = downloadEvent.data
-          setProgresses((prev) => {
-            const progressData = prev.get(chapterId)
-            if (progressData === undefined) {
-              return prev
-            }
-            const next = new Map(prev)
-            next.set(chapterId, { ...progressData, retryAfter })
-            return new Map(next)
-          })
         } else if (downloadEvent.event == 'ChapterStart') {
           const { chapterId, total } = downloadEvent.data
           setProgresses((prev) => {
@@ -189,7 +176,7 @@ function DownloadingPane({ className, config, setConfig }: Props) {
       </div>
       <span>下载速度: {downloadSpeed}</span>
       <div className="overflow-auto">
-        {sortedProgresses.map(([chapterId, { comicTitle, chapterTitle, percentage, current, total, retryAfter }]) => (
+        {sortedProgresses.map(([chapterId, { comicTitle, chapterTitle, percentage, current, total }]) => (
           <div className="grid grid-cols-[1fr_1fr_2fr]" key={chapterId}>
             <span className="mb-1! text-ellipsis whitespace-nowrap overflow-hidden" title={comicTitle}>
               {comicTitle}
@@ -197,7 +184,7 @@ function DownloadingPane({ className, config, setConfig }: Props) {
             <span className="mb-1! text-ellipsis whitespace-nowrap overflow-hidden" title={chapterTitle}>
               {chapterTitle}
             </span>
-            <DownloadingProgress retryAfter={retryAfter} total={total} percentage={percentage} current={current} />
+            <DownloadingProgress total={total} percentage={percentage} current={current} />
           </div>
         ))}
       </div>
@@ -206,24 +193,17 @@ function DownloadingPane({ className, config, setConfig }: Props) {
 }
 
 interface DownloadingProgressProps {
-  retryAfter: number
   total: number
   percentage: number
   current: number
 }
 
-function DownloadingProgress({ retryAfter, total, percentage, current }: DownloadingProgressProps) {
-  if (retryAfter !== 0) {
-    return (
-      <span className="mb-1! text-ellipsis whitespace-nowrap overflow-hidden">
-        风控中，将在{retryAfter}秒后自动重试
-      </span>
-    )
-  } else if (total === 0) {
+function DownloadingProgress({ total, percentage, current }: DownloadingProgressProps) {
+  if (total === 0) {
     return <span className="mb-1! text-ellipsis whitespace-nowrap overflow-hidden">等待中</span>
+  } else {
+    return <Progress percent={percentage} format={() => `${current}/${total}`} />
   }
-
-  return <Progress percent={percentage} format={() => `${current}/${total}`} />
 }
 
 export default DownloadingPane
