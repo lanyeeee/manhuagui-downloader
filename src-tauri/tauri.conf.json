@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "manhuagui-downloader",
+        "title": "漫画柜下载器",
         "width": 800,
         "height": 600
       }
@@ -24,6 +24,7 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "licenseFile": "../LICENSE",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
