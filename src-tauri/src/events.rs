@@ -16,6 +16,9 @@ pub enum DownloadEvent {
     ChapterStart { chapter_id: i64, total: u32 },
 
     #[serde(rename_all = "camelCase")]
+    ChapterSleeping { chapter_id: i64, remaining_sec: u64 },
+
+    #[serde(rename_all = "camelCase")]
     ChapterEnd {
         chapter_id: i64,
         err_msg: Option<String>,
