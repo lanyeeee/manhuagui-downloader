@@ -6,14 +6,16 @@ mod errors;
 mod events;
 mod export;
 mod extensions;
+mod logger;
 mod manhuagui_client;
 mod types;
 mod utils;
 
-use anyhow::Context;
 use config::Config;
 use download_manager::DownloadManager;
-use events::{DownloadEvent, ExportCbzEvent, ExportPdfEvent, UpdateDownloadedComicsEvent};
+use events::{
+    DownloadEvent, ExportCbzEvent, ExportPdfEvent, LogEvent, UpdateDownloadedComicsEvent,
+};
 use manhuagui_client::ManhuaguiClient;
 use parking_lot::RwLock;
 use tauri::{Manager, Wry};
@@ -48,6 +50,7 @@ pub fn run() {
             ExportCbzEvent,
             ExportPdfEvent,
             UpdateDownloadedComicsEvent,
+            LogEvent,
         ]);
 
     #[cfg(debug_assertions)]
@@ -68,13 +71,7 @@ pub fn run() {
         .setup(move |app| {
             builder.mount_events(app);
 
-            let app_data_dir = app
-                .path()
-                .app_data_dir()
-                .context("failed to get app data dir")?;
-
-            std::fs::create_dir_all(&app_data_dir)
-                .context(format!("failed to create app data dir: {app_data_dir:?}"))?;
+            logger::init(app.handle())?;
 
             let config = RwLock::new(Config::new(app.handle())?);
             app.manage(config);

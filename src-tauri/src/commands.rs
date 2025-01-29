@@ -8,7 +8,7 @@ use tauri_specta::Event;
 use crate::{
     config::Config,
     download_manager::DownloadManager,
-    errors::CommandResult,
+    errors::{CommandError, CommandResult},
     events::UpdateDownloadedComicsEvent,
     export,
     manhuagui_client::ManhuaguiClient,
@@ -38,7 +38,9 @@ pub fn save_config(
 ) -> CommandResult<()> {
     let mut config_state = config_state.write();
     *config_state = config;
-    config_state.save(&app)?;
+    config_state
+        .save(&app)
+        .map_err(|err| CommandError::from("保存配置失败", err))?;
     Ok(())
 }
 
@@ -52,7 +54,7 @@ pub async fn login(
     let cookie = manhuagui_client
         .login(&username, &password)
         .await
-        .context("使用账号密码登录失败")?;
+        .map_err(|err| CommandError::from("使用账号密码登录失败", err))?;
     Ok(cookie)
 }
 
@@ -64,7 +66,7 @@ pub async fn get_user_profile(
     let user_profile = manhuagui_client
         .get_user_profile()
         .await
-        .context("获取用户信息失败")?;
+        .map_err(|err| CommandError::from("获取用户信息失败", err))?;
     Ok(user_profile)
 }
 
@@ -78,7 +80,7 @@ pub async fn search(
     let search_result = manhuagui_client
         .search(&keyword, page_num)
         .await
-        .context("搜索失败")?;
+        .map_err(|err| CommandError::from("搜索失败", err))?;
     Ok(search_result)
 }
 
@@ -91,7 +93,7 @@ pub async fn get_comic(
     let comic = manhuagui_client
         .get_comic(id)
         .await
-        .context(format!("获取漫画`{id}`的信息失败"))?;
+        .map_err(|err| CommandError::from(&format!("获取漫画`{id}`的信息失败"), err))?;
     Ok(comic)
 }
 
@@ -102,7 +104,11 @@ pub async fn download_chapters(
     chapters: Vec<ChapterInfo>,
 ) -> CommandResult<()> {
     for ep in chapters {
-        download_manager.submit_chapter(ep).await?;
+        let chapter_id = ep.chapter_id;
+        download_manager
+            .submit_chapter(ep)
+            .await
+            .map_err(|err| CommandError::from(&format!("下载章节`{chapter_id}`失败"), err))?;
     }
     Ok(())
 }
@@ -116,7 +122,7 @@ pub async fn get_favorite(
     let get_favorite_result = manhuagui_client
         .get_favorite(page_num)
         .await
-        .context("获取收藏夹失败")?;
+        .map_err(|err| CommandError::from("获取收藏夹失败", err))?;
     Ok(get_favorite_result)
 }
 
@@ -132,21 +138,21 @@ pub fn save_metadata(config: State<RwLock<Config>>, mut comic: Comic) -> Command
     }
 
     let comic_title = &comic.title;
-    let comic_json = serde_json::to_string_pretty(&comic).context(format!(
-        "`{comic_title}`的元数据保存失败，将Comic序列化为json失败"
-    ))?;
+    let comic_json = serde_json::to_string_pretty(&comic)
+        .context(format!("将Comic序列化为json失败"))
+        .map_err(|err| CommandError::from(&format!("`{comic_title}`的元数据保存失败"), err))?;
 
     let download_dir = config.read().download_dir.clone();
     let metadata_dir = download_dir.join(comic_title);
     let metadata_path = metadata_dir.join("元数据.json");
 
-    std::fs::create_dir_all(&metadata_dir).context(format!(
-        "`{comic_title}`的元数据保存失败，创建目录`{metadata_dir:?}`失败"
-    ))?;
+    std::fs::create_dir_all(&metadata_dir)
+        .context(format!("创建目录`{metadata_dir:?}`失败"))
+        .map_err(|err| CommandError::from(&format!("`{comic_title}`的元数据保存失败"), err))?;
 
-    std::fs::write(&metadata_path, comic_json).context(format!(
-        "`{comic_title}`的元数据保存失败，写入文件`{metadata_path:?}`失败"
-    ))?;
+    std::fs::write(&metadata_path, comic_json)
+        .context(format!("写入文件`{metadata_path:?}`失败"))
+        .map_err(|err| CommandError::from(&format!("`{comic_title}`的元数据保存失败"), err))?;
 
     Ok(())
 }
@@ -161,9 +167,8 @@ pub fn get_downloaded_comics(
     let download_dir = config.read().download_dir.clone();
     // 遍历下载目录，获取所有元数据文件的路径和修改时间
     let mut metadata_path_with_modify_time = std::fs::read_dir(&download_dir)
-        .context(format!(
-            "获取已下载的漫画失败，读取下载目录 {download_dir:?} 失败"
-        ))?
+        .context(format!("读取下载目录`{download_dir:?}`失败"))
+        .map_err(|err| CommandError::from("获取已下载的漫画失败", err))?
         .filter_map(Result::ok)
         .filter_map(|entry| {
             let metadata_path = entry.path().join("元数据.json");
@@ -191,7 +196,8 @@ pub fn get_downloaded_comics(
 #[allow(clippy::needless_pass_by_value)]
 pub fn export_cbz(app: AppHandle, comic: Comic) -> CommandResult<()> {
     let comic_title = comic.title.clone();
-    export::cbz(&app, comic).context(format!("漫画`{comic_title}`导出cbz失败"))?;
+    export::cbz(&app, comic)
+        .map_err(|err| CommandError::from(&format!("漫画`{comic_title}`导出cbz失败"), err))?;
     Ok(())
 }
 
@@ -200,7 +206,8 @@ pub fn export_cbz(app: AppHandle, comic: Comic) -> CommandResult<()> {
 #[allow(clippy::needless_pass_by_value)]
 pub fn export_pdf(app: AppHandle, comic: Comic) -> CommandResult<()> {
     let comic_title = comic.title.clone();
-    export::pdf(&app, comic).context(format!("漫画`{comic_title}`导出pdf失败"))?;
+    export::pdf(&app, comic)
+        .map_err(|err| CommandError::from(&format!("漫画`{comic_title}`导出pdf失败"), err))?;
     Ok(())
 }
 

@@ -85,18 +85,11 @@ function DownloadingPane({ className, config, setConfig }: Props) {
             return new Map(next)
           })
         } else if (downloadEvent.event == 'ChapterEnd') {
-          const { chapterId, errMsg } = downloadEvent.data
+          const { chapterId } = downloadEvent.data
           setProgresses((prev) => {
             const progressData = prev.get(chapterId)
             if (progressData === undefined) {
               return prev
-            }
-            if (errMsg !== null) {
-              notificationRef.current.error({
-                message: `${progressData.comicTitle} - ${progressData.chapterTitle}下载章节失败`,
-                description: errMsg,
-                duration: 0,
-              })
             }
             const next = new Map(prev)
             next.delete(chapterId)
@@ -113,16 +106,6 @@ function DownloadingPane({ className, config, setConfig }: Props) {
             const percentage = Math.round((current / progressData.total) * 100)
             next.set(chapterId, { ...progressData, current, percentage, indicator: `${current}/${progressData.total}` })
             return new Map(next)
-          })
-        } else if (downloadEvent.event == 'ImageError') {
-          const { chapterId, errMsg } = downloadEvent.data
-          const progressData = progressesRef.current.get(chapterId)
-          if (progressData === undefined) {
-            return
-          }
-          notificationRef.current.error({
-            message: `${progressData.comicTitle} - ${progressData.chapterTitle}下载图片失败`,
-            description: errMsg,
           })
         } else if (downloadEvent.event == 'Speed') {
           const { speed } = downloadEvent.data
@@ -157,6 +140,7 @@ function DownloadingPane({ className, config, setConfig }: Props) {
     })
   }
 
+  // TODO: 这个操作不要在前端进行，交给后端
   async function revealDownloadDir() {
     try {
       await revealItemInDir(config.downloadDir)

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Comic, commands, Config, UserProfile } from './bindings.ts'
+import { Comic, commands, Config, events, UserProfile } from './bindings.ts'
 import { App as AntdApp, Avatar, Button, Input, Tabs, TabsProps } from 'antd'
 import LoginDialog from './components/LoginDialog.tsx'
 import DownloadingPane from './panes/DownloadingPane.tsx'
@@ -41,11 +41,7 @@ function AppContent({ config, setConfig }: Props) {
 
     commands.getUserProfile().then(async (result) => {
       if (result.status === 'error') {
-        notification.error({
-          message: '获取用户信息失败',
-          description: result.error,
-          duration: 0,
-        })
+        console.error(result.error)
         setUserProfile(undefined)
         return
       }
@@ -53,8 +49,43 @@ function AppContent({ config, setConfig }: Props) {
       setUserProfile(result.data)
       message.success('获取用户信息成功')
     })
-  }, [config.cookie, message, notification])
+  }, [config.cookie, message])
 
+  useEffect(() => {
+    let mounted = true
+    let unListenLogEvent: () => void | undefined
+
+    events.logEvent
+      .listen(async ({ payload: logEvent }) => {
+        const { timestamp, level, fields, target, filename, line_number } = logEvent
+        if (level === 'ERROR') {
+          notification.error({
+            message: fields['err_title'] as string,
+            description: fields['message'] as string,
+            duration: 0,
+          })
+        }
+        const fields_str = Object.entries(fields)
+          .map(([key, value]) => `${key}=${value}`)
+          .join(' ')
+        const content = `${timestamp} ${level} ${target}: ${filename}:${line_number} ${fields_str}`
+        console.log(content)
+      })
+      .then((unListenFn) => {
+        if (mounted) {
+          unListenLogEvent = unListenFn
+        } else {
+          unListenFn()
+        }
+      })
+
+    return () => {
+      mounted = false
+      unListenLogEvent?.()
+    }
+  }, [])
+
+  // TODO: 这个操作不要在前端进行，交给后端
   async function revealConfigPath() {
     const configPath = await path.join(await appDataDir(), 'config.json')
     try {

@@ -1,6 +1,10 @@
+use std::collections::HashMap;
+
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use tauri_specta::Event;
+
+use crate::types::LogLevel;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type, Event)]
 #[serde(tag = "event", content = "data")]
@@ -19,23 +23,13 @@ pub enum DownloadEvent {
     ChapterSleeping { chapter_id: i64, remaining_sec: u64 },
 
     #[serde(rename_all = "camelCase")]
-    ChapterEnd {
-        chapter_id: i64,
-        err_msg: Option<String>,
-    },
+    ChapterEnd { chapter_id: i64 },
 
     #[serde(rename_all = "camelCase")]
     ImageSuccess {
         chapter_id: i64,
         url: String,
         current: u32,
-    },
-
-    #[serde(rename_all = "camelCase")]
-    ImageError {
-        chapter_id: i64,
-        url: String,
-        err_msg: String,
     },
 
     #[serde(rename_all = "camelCase")]
@@ -100,4 +94,16 @@ pub enum UpdateDownloadedComicsEvent {
 
     #[serde(rename_all = "camelCase")]
     DownloadTaskCreated,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type, Event)]
+#[serde(rename_all = "camelCase")]
+pub struct LogEvent {
+    pub timestamp: String,
+    pub level: LogLevel,
+    pub fields: HashMap<String, serde_json::Value>,
+    pub target: String,
+    pub filename: String,
+    #[serde(rename = "line_number")]
+    pub line_number: i64,
 }
