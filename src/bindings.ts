@@ -116,11 +116,13 @@ export const events = __makeEvents__<{
 downloadEvent: DownloadEvent,
 exportCbzEvent: ExportCbzEvent,
 exportPdfEvent: ExportPdfEvent,
+logEvent: LogEvent,
 updateDownloadedComicsEvent: UpdateDownloadedComicsEvent
 }>({
 downloadEvent: "download-event",
 exportCbzEvent: "export-cbz-event",
 exportPdfEvent: "export-pdf-event",
+logEvent: "log-event",
 updateDownloadedComicsEvent: "update-downloaded-comics-event"
 })
 
@@ -302,12 +304,15 @@ aliases: string[];
  * 简介
  */
 intro: string }
-export type CommandError = string
+export type CommandError = { err_title: string; err_message: string }
 export type Config = { cookie: string; downloadDir: string; exportDir: string; downloadIntervalSec: number }
-export type DownloadEvent = { event: "ChapterPending"; data: { chapterId: number; comicTitle: string; chapterTitle: string } } | { event: "ChapterStart"; data: { chapterId: number; total: number } } | { event: "ChapterSleeping"; data: { chapterId: number; remainingSec: number } } | { event: "ChapterEnd"; data: { chapterId: number; errMsg: string | null } } | { event: "ImageSuccess"; data: { chapterId: number; url: string; current: number } } | { event: "ImageError"; data: { chapterId: number; url: string; errMsg: string } } | { event: "Speed"; data: { speed: string } }
+export type DownloadEvent = { event: "ChapterPending"; data: { chapterId: number; comicTitle: string; chapterTitle: string } } | { event: "ChapterStart"; data: { chapterId: number; total: number } } | { event: "ChapterSleeping"; data: { chapterId: number; remainingSec: number } } | { event: "ChapterEnd"; data: { chapterId: number } } | { event: "ImageSuccess"; data: { chapterId: number; url: string; current: number } } | { event: "Speed"; data: { speed: string } }
 export type ExportCbzEvent = { event: "Start"; data: { uuid: string; comicTitle: string; total: number } } | { event: "Progress"; data: { uuid: string; current: number } } | { event: "End"; data: { uuid: string } }
 export type ExportPdfEvent = { event: "CreateStart"; data: { uuid: string; comicTitle: string; total: number } } | { event: "CreateProgress"; data: { uuid: string; current: number } } | { event: "CreateEnd"; data: { uuid: string } } | { event: "MergeStart"; data: { uuid: string; comicTitle: string; total: number } } | { event: "MergeProgress"; data: { uuid: string; current: number } } | { event: "MergeEnd"; data: { uuid: string } }
 export type GetFavoriteResult = { comics: ComicInFavorite[]; current: number; total: number }
+export type JsonValue = null | boolean | number | string | JsonValue[] | { [key in string]: JsonValue }
+export type LogEvent = { timestamp: string; level: LogLevel; fields: { [key in string]: JsonValue }; target: string; filename: string; line_number: number }
+export type LogLevel = "TRACE" | "DEBUG" | "INFO" | "WARN" | "ERROR"
 export type SearchResult = { comics: ComicInSearch[]; current: number; total: number }
 export type UpdateDownloadedComicsEvent = { event: "GettingComics"; data: { total: number } } | { event: "ComicGot"; data: { current: number; total: number } } | { event: "DownloadTaskCreated" }
 export type UserProfile = { username: string; avatar: string }

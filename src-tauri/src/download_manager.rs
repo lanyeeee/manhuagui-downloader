@@ -85,6 +85,7 @@ impl DownloadManager {
     }
 
     #[allow(clippy::cast_possible_truncation)]
+    #[allow(clippy::too_many_lines)] // TODO: 重构此方法，减少代码行数
     async fn process_chapter(self, chapter_info: ChapterInfo) {
         let chapter_id = chapter_info.chapter_id;
         let comic_title = &chapter_info.comic_title;
@@ -107,13 +108,11 @@ impl DownloadManager {
         {
             Ok(permit) => permit,
             Err(err) => {
-                let err = err.context(format!("{err_prefix}获取下载章节的semaphore失败"));
-                // 发送下载章节结束事件
-                let _ = DownloadEvent::ChapterEnd {
-                    chapter_id,
-                    err_msg: Some(err.to_string_chain()),
-                }
-                .emit(&self.app);
+                let err_title = format!("{err_prefix}获取下载章节的semaphore失败");
+                let string_chain = err.to_string_chain();
+                tracing::error!(err_title, message = string_chain);
+                // 发送章节下载结束事件
+                let _ = DownloadEvent::ChapterEnd { chapter_id }.emit(&self.app);
                 return;
             }
         };
@@ -121,13 +120,11 @@ impl DownloadManager {
         let urls = match self.manhuagui_client().get_image_urls(&chapter_info).await {
             Ok(urls) => urls,
             Err(err) => {
-                let err = err.context(format!("{err_prefix}获取图片链接失败"));
-                // 发送下载章节结束事件
-                let _ = DownloadEvent::ChapterEnd {
-                    chapter_id,
-                    err_msg: Some(err.to_string_chain()),
-                }
-                .emit(&self.app);
+                let err_title = format!("{err_prefix}获取图片链接失败");
+                let string_chain = err.to_string_chain();
+                tracing::error!(err_title, message = string_chain);
+                // 发送下载结束事件
+                let _ = DownloadEvent::ChapterEnd { chapter_id }.emit(&self.app);
                 return;
             }
         };
@@ -139,14 +136,11 @@ impl DownloadManager {
         // 创建临时下载目录
         let temp_download_dir = get_temp_download_dir(&self.app, &chapter_info);
         if let Err(err) = std::fs::create_dir_all(&temp_download_dir).map_err(anyhow::Error::from) {
-            // 如果创建目录失败，则发送下载章节结束事件，并返回
-            let err = err.context(format!("{err_prefix}创建目录`{temp_download_dir:?}`失败"));
-            // 发送下载章节结束事件
-            let _ = DownloadEvent::ChapterEnd {
-                chapter_id,
-                err_msg: Some(err.to_string_chain()),
-            }
-            .emit(&self.app);
+            let err_title = format!("{err_prefix}创建目录`{temp_download_dir:?}`失败");
+            let string_chain = err.to_string_chain();
+            tracing::error!(err_title, message = string_chain);
+            // 发送下载结束事件
+            let _ = DownloadEvent::ChapterEnd { chapter_id }.emit(&self.app);
             return;
         }
         // 发送下载开始事件
@@ -169,29 +163,31 @@ impl DownloadManager {
         let downloaded_count = downloaded_count.load(Ordering::Relaxed);
         // 此章节的图片未全部下载成功
         if downloaded_count != total {
-            let err_msg =
-                format!("{err_prefix}总共有`{total}`张图片，但只下载了`{downloaded_count}`张");
-            // 发送下载结束事件
-            let _ = DownloadEvent::ChapterEnd {
-                chapter_id,
-                err_msg: Some(err_msg),
-            }
-            .emit(&self.app);
+            let err_title = format!("{err_prefix}下载不完整");
+            let err_msg = format!("总共有`{total}`张图片，但只下载了`{downloaded_count}`张");
+            tracing::error!(err_title, message = err_msg);
+            // 发送章节下载结束事件
+            let _ = DownloadEvent::ChapterEnd { chapter_id }.emit(&self.app);
+            return;
         }
-        // 此章节的图片全部下载成功
-        let err_msg = match rename_temp_download_dir(&chapter_info, &temp_download_dir) {
-            Ok(()) => None,
-            Err(err) => Some(
-                err.context(format!("{err_prefix}重命名临时下载目录失败"))
-                    .to_string_chain(),
-            ),
-        };
-        // 发送下载结束事件
-        let _ = DownloadEvent::ChapterEnd {
+        if let Err(err) = rename_temp_download_dir(&chapter_info, &temp_download_dir) {
+            let err_title = format!("{err_prefix}重命名临时目录失败");
+            let string_chain = err.to_string_chain();
+            tracing::error!(err_title, message = string_chain);
+            // 发送章节下载结束事件
+            let _ = DownloadEvent::ChapterEnd { chapter_id }.emit(&self.app);
+            return;
+        }
+        // 章节下载成功
+        tracing::info!(
             chapter_id,
-            err_msg,
-        }
-        .emit(&self.app);
+            comic_title,
+            group_name,
+            chapter_title,
+            "章节下载成功"
+        );
+        // 发送下载结束事件
+        let _ = DownloadEvent::ChapterEnd { chapter_id }.emit(&self.app);
     }
 
     async fn sleep_between_chapters(&self, chapter_id: i64) {
@@ -223,42 +219,27 @@ impl DownloadManager {
         let permit = match self.img_sem.acquire().await.map_err(anyhow::Error::from) {
             Ok(permit) => permit,
             Err(err) => {
-                let err = err.context("获取下载图片的semaphore失败");
-                // 发送下载图片失败事件
-                let _ = DownloadEvent::ImageError {
-                    chapter_id,
-                    url: url.clone(),
-                    err_msg: err.to_string_chain(),
-                }
-                .emit(&self.app);
+                let err_title = "获取下载图片的semaphore失败";
+                let string_chain = err.to_string_chain();
+                tracing::error!(err_title, message = string_chain);
                 return;
             }
         };
         let image_data = match self.manhuagui_client().get_image_bytes(&url).await {
             Ok(data) => data,
             Err(err) => {
-                let err = err.context(format!("下载图片`{url}`失败"));
-                // 发送下载图片失败事件
-                let _ = DownloadEvent::ImageError {
-                    chapter_id,
-                    url: url.clone(),
-                    err_msg: err.to_string_chain(),
-                }
-                .emit(&self.app);
+                let err_title = format!("下载图片`{url}`失败");
+                let string_chain = err.to_string_chain();
+                tracing::error!(err_title, message = string_chain);
                 return;
             }
         };
         drop(permit);
         // 保存图片
         if let Err(err) = std::fs::write(&save_path, &image_data).map_err(anyhow::Error::from) {
-            let err = err.context(format!("保存图片`{save_path:?}`失败"));
-            // 发送下载图片失败事件
-            let _ = DownloadEvent::ImageError {
-                chapter_id,
-                url: url.clone(),
-                err_msg: err.to_string_chain(),
-            }
-            .emit(&self.app);
+            let err_title = format!("保存图片`{save_path:?}`失败");
+            let string_chain = err.to_string_chain();
+            tracing::error!(err_title, message = string_chain);
             return;
         }
         // 记录下载字节数
