@@ -1,0 +1,176 @@
+import { App as AntdApp, Modal, Input, Button, Select } from 'antd'
+import { useEffect, useState, useMemo, useRef } from 'react'
+import { events, LogEvent, LogLevel } from '../bindings.ts'
+import { path } from '@tauri-apps/api'
+import { appDataDir } from '@tauri-apps/api/path'
+import { revealItemInDir } from '@tauri-apps/plugin-opener'
+
+interface Props {
+  logViewerShowing: boolean
+  setLogViewerShowing: (showing: boolean) => void
+}
+
+type LogRecord = LogEvent & { id: number; formatedLog: string }
+
+function LogViewer({ logViewerShowing, setLogViewerShowing }: Props) {
+  const { notification } = AntdApp.useApp()
+  const [logRecords, setLogRecords] = useState<LogRecord[]>([])
+  const [searchText, setSearchText] = useState('')
+  const [selectedLevel, setSelectedLevel] = useState<LogLevel>('INFO')
+  const nextLogRecordId = useRef<number>(1)
+
+  useEffect(() => {
+    let mounted = true
+    let unListenLogEvent: () => void | undefined
+
+    events.logEvent
+      .listen(async ({ payload: logEvent }) => {
+        setLogRecords((prev) => [
+          ...prev,
+          {
+            ...logEvent,
+            id: nextLogRecordId.current++,
+            formatedLog: formatLogEvent(logEvent),
+          },
+        ])
+        const { level, fields } = logEvent
+        if (level === 'ERROR') {
+          notification.error({
+            message: fields['err_title'] as string,
+            description: fields['message'] as string,
+            duration: 0,
+          })
+        }
+      })
+      .then((unListenFn) => {
+        if (mounted) {
+          unListenLogEvent = unListenFn
+        } else {
+          unListenFn()
+        }
+      })
+
+    return () => {
+      mounted = false
+      unListenLogEvent?.()
+    }
+  }, [])
+
+  const filteredLogs = useMemo(() => {
+    return logRecords.filter(({ level, formatedLog }) => {
+      // 定义日志等级的优先级顺序
+      const logLevelPriority = {
+        TRACE: 0,
+        DEBUG: 1,
+        INFO: 2,
+        WARN: 3,
+        ERROR: 4,
+      }
+      // 首先按日志等级筛选
+      if (logLevelPriority[level] < logLevelPriority[selectedLevel]) {
+        return false
+      }
+      // 然后按搜索文本筛选
+      if (searchText === '') {
+        return true
+      }
+
+      return formatedLog.toLowerCase().includes(searchText.toLowerCase())
+    })
+  }, [logRecords, searchText, selectedLevel])
+
+  function getLevelStyles(level: LogLevel) {
+    switch (level) {
+      case 'TRACE':
+        return 'text-gray-400'
+      case 'DEBUG':
+        return 'text-green-400'
+      case 'INFO':
+        return 'text-blue-400'
+      case 'WARN':
+        return 'text-yellow-400'
+      case 'ERROR':
+        return 'text-red-400'
+    }
+  }
+
+  const logLevelOptions = [
+    { value: 'TRACE', label: 'TRACE' },
+    { value: 'DEBUG', label: 'DEBUG' },
+    { value: 'INFO', label: 'INFO' },
+    { value: 'WARN', label: 'WARN' },
+    { value: 'ERROR', label: 'ERROR' },
+  ]
+
+  function formatLogEvent(logEvent: LogEvent) {
+    const { timestamp, level, fields, target, filename, line_number } = logEvent
+    const fields_str = Object.entries(fields)
+      .map(([key, value]) => `${key}=${value}`)
+      .join(' ')
+    return `${timestamp} ${level} ${target}: ${filename}:${line_number} ${fields_str}`
+  }
+
+  const clearLogRecords = () => {
+    setLogRecords([])
+    nextLogRecordId.current = 1
+  }
+
+  // TODO: 这个操作不要在前端进行，交给后端
+  async function revealLogDir() {
+    const configPath = await path.join(await appDataDir(), '日志')
+    try {
+      await revealItemInDir(configPath)
+    } catch (error) {
+      if (typeof error === 'string') {
+        notification.error({
+          message: '打开配置目录失败',
+          description: `打开配置目录"${configPath}失败: ${error}`,
+          duration: 0,
+        })
+      } else {
+        notification.error({
+          message: '打开配置目录失败',
+          description: `打开配置目录"${configPath}失败，请联系开发者`,
+          duration: 0,
+        })
+        console.error(error)
+      }
+    }
+  }
+
+  return (
+    <Modal
+      title="日志浏览器"
+      open={logViewerShowing}
+      onCancel={() => setLogViewerShowing(false)}
+      width="95%"
+      footer={null}>
+      <div className="mb-2 flex flex-wrap gap-2">
+        <Input
+          placeholder="搜索日志..."
+          value={searchText}
+          onChange={(e) => setSearchText(e.target.value)}
+          style={{ width: 300 }}
+          allowClear
+        />
+        <Select value={selectedLevel} onChange={setSelectedLevel} options={logLevelOptions} style={{ width: 120 }} />
+        <div className="flex flex-wrap gap-2 ml-auto">
+          <Button onClick={revealLogDir}>打开日志目录</Button>
+          <Button onClick={clearLogRecords} danger>
+            清空日志浏览器
+          </Button>
+        </div>
+      </div>
+
+      <div className="h-[calc(100vh-300px)] overflow-auto bg-gray-900 p-3">
+        {filteredLogs.map(({ id, level, formatedLog }) => (
+          <div key={id} className={`p-1 hover:bg-white/10 whitespace-pre-wrap ${getLevelStyles(level)}`}>
+            {formatedLog}
+          </div>
+        ))}
+      </div>
+    </Modal>
+  )
+}
+
+export default LogViewer
