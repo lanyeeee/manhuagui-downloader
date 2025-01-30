@@ -51,7 +51,7 @@ function AppContent({ config, setConfig }: Props) {
   }, [config.cookie, message])
 
   async function test() {
-    const result = await commands.updateDownloadedComics()
+    const result = await commands.getLogsSize()
     console.log(result)
   }
 
