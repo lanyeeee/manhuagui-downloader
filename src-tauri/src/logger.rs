@@ -59,12 +59,13 @@ pub fn init(app: &AppHandle) -> anyhow::Result<()> {
     ))?;
     // 过滤掉来自其他库的日志
     let target_filter = Targets::new().with_target(lib_target, Level::TRACE);
+    let logs_dir = logs_dir(app).context("获取日志目录失败")?;
     // 输出到文件
     let file_appender = RollingFileAppender::builder()
         .filename_prefix("manhuagui-downloader")
         .filename_suffix("log")
         .rotation(Rotation::DAILY)
-        .build(app_data_dir.join("日志"))
+        .build(logs_dir)
         .expect("创建RollingFileAppender失败");
     let (non_blocking_appender, guard) = non_blocking(file_appender);
     std::mem::forget(guard);
@@ -102,4 +103,12 @@ pub fn init(app: &AppHandle) -> anyhow::Result<()> {
         .init();
 
     Ok(())
+}
+
+pub fn logs_dir(app: &AppHandle) -> anyhow::Result<std::path::PathBuf> {
+    let app_data_dir = app
+        .path()
+        .app_data_dir()
+        .context("获取app_data_dir目录失败")?;
+    Ok(app_data_dir.join("日志"))
 }

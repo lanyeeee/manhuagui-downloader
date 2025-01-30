@@ -10,7 +10,7 @@ use crate::{
     download_manager::DownloadManager,
     errors::{CommandError, CommandResult},
     events::UpdateDownloadedComicsEvent,
-    export,
+    export, logger,
     manhuagui_client::ManhuaguiClient,
     types::{ChapterInfo, Comic, GetFavoriteResult, SearchResult, UserProfile},
 };
@@ -277,4 +277,21 @@ pub async fn update_downloaded_comics(
     let _ = UpdateDownloadedComicsEvent::DownloadTaskCreated.emit(&app);
 
     Ok(())
+}
+
+#[allow(clippy::needless_pass_by_value)]
+#[tauri::command(async)]
+#[specta::specta]
+pub fn get_logs_size(app: AppHandle) -> CommandResult<u64> {
+    let logs_dir = logger::logs_dir(&app)
+        .context("获取日志目录失败")
+        .map_err(|err| CommandError::from("获取日志大小失败", err))?;
+    let logs_size = std::fs::read_dir(&logs_dir)
+        .context(format!("读取日志目录`{logs_dir:?}`失败"))
+        .map_err(|err| CommandError::from("获取日志大小失败", err))?
+        .filter_map(Result::ok)
+        .filter_map(|entry| entry.metadata().ok())
+        .map(|metadata| metadata.len())
+        .sum::<u64>();
+    Ok(logs_size)
 }
