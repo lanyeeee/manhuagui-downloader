@@ -1,6 +1,6 @@
 import { App as AntdApp, Modal, Input, Button, Select } from 'antd'
 import { useEffect, useState, useMemo, useRef } from 'react'
-import { events, LogEvent, LogLevel } from '../bindings.ts'
+import { commands, events, LogEvent, LogLevel } from '../bindings.ts'
 import { path } from '@tauri-apps/api'
 import { appDataDir } from '@tauri-apps/api/path'
 import { revealItemInDir } from '@tauri-apps/plugin-opener'
@@ -17,6 +17,7 @@ function LogViewer({ logViewerShowing, setLogViewerShowing }: Props) {
   const [logRecords, setLogRecords] = useState<LogRecord[]>([])
   const [searchText, setSearchText] = useState('')
   const [selectedLevel, setSelectedLevel] = useState<LogLevel>('INFO')
+  const [logsDirSize, setLogsDirSize] = useState<number>(0)
   const nextLogRecordId = useRef<number>(1)
 
   useEffect(() => {
@@ -55,6 +56,35 @@ function LogViewer({ logViewerShowing, setLogViewerShowing }: Props) {
       unListenLogEvent?.()
     }
   }, [])
+
+  useEffect(() => {
+    commands.getLogsSize().then((result) => {
+      if (!logViewerShowing) {
+        return
+      }
+
+      if (result.status === 'error') {
+        console.error(result.error)
+        return
+      }
+
+      setLogsDirSize(result.data)
+    })
+  }, [logViewerShowing])
+
+  const formatedLogsDirSize = useMemo(() => {
+    const units = ['B', 'KB', 'MB']
+    let size = logsDirSize
+    let unitIndex = 0
+
+    while (size >= 1024 && unitIndex < 2) {
+      size /= 1024
+      unitIndex++
+    }
+
+    // 保留两位小数
+    return `${size.toFixed(2)} ${units[unitIndex]}`
+  }, [logsDirSize])
 
   const filteredLogs = useMemo(() => {
     return logRecords.filter(({ level, formatedLog }) => {
@@ -102,7 +132,7 @@ function LogViewer({ logViewerShowing, setLogViewerShowing }: Props) {
     { value: 'ERROR', label: 'ERROR' },
   ]
 
-  function formatLogEvent(logEvent: LogEvent) {
+  function formatLogEvent(logEvent: LogEvent): string {
     const { timestamp, level, fields, target, filename, line_number } = logEvent
     const fields_str = Object.entries(fields)
       .map(([key, value]) => `${key}=${value}`)
@@ -110,7 +140,7 @@ function LogViewer({ logViewerShowing, setLogViewerShowing }: Props) {
     return `${timestamp} ${level} ${target}: ${filename}:${line_number} ${fields_str}`
   }
 
-  const clearLogRecords = () => {
+  function clearLogRecords() {
     setLogRecords([])
     nextLogRecordId.current = 1
   }
@@ -140,7 +170,7 @@ function LogViewer({ logViewerShowing, setLogViewerShowing }: Props) {
 
   return (
     <Modal
-      title="日志浏览器"
+      title={<div className="flex items-center">日志目录总大小：{formatedLogsDirSize}</div>}
       open={logViewerShowing}
       onCancel={() => setLogViewerShowing(false)}
       width="95%"
