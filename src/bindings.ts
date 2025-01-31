@@ -107,9 +107,9 @@ async updateDownloadedComics() : Promise<Result<null, CommandError>> {
     else return { status: "error", error: e  as any };
 }
 },
-async getLogsSize() : Promise<Result<number, CommandError>> {
+async getLogsDirSize() : Promise<Result<number, CommandError>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("get_logs_size") };
+    return { status: "ok", data: await TAURI_INVOKE("get_logs_dir_size") };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };

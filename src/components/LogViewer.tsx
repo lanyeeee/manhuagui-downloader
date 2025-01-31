@@ -58,7 +58,7 @@ function LogViewer({ logViewerShowing, setLogViewerShowing }: Props) {
   }, [])
 
   useEffect(() => {
-    commands.getLogsSize().then((result) => {
+    commands.getLogsDirSize().then((result) => {
       if (!logViewerShowing) {
         return
       }
