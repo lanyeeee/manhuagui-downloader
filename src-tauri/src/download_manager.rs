@@ -99,6 +99,13 @@ impl DownloadManager {
             chapter_title: chapter_title.clone(),
         }
         .emit(&self.app);
+        tracing::trace!(
+            chapter_id,
+            comic_title,
+            group_name,
+            chapter_title,
+            "章节开始排队"
+        );
         // 限制同时下载的章节数量
         let permit = match self
             .chapter_sem
@@ -116,6 +123,13 @@ impl DownloadManager {
                 return;
             }
         };
+        tracing::trace!(
+            chapter_id,
+            comic_title,
+            group_name,
+            chapter_title,
+            "章节开始获取图片链接"
+        );
         // 获取此章节每张图片的下载链接
         let urls = match self.manhuagui_client().get_image_urls(&chapter_info).await {
             Ok(urls) => urls,
@@ -143,6 +157,13 @@ impl DownloadManager {
             let _ = DownloadEvent::ChapterEnd { chapter_id }.emit(&self.app);
             return;
         }
+        tracing::trace!(
+            chapter_id,
+            comic_title,
+            group_name,
+            chapter_title,
+            "创建临时下载目录`{temp_download_dir:?}`成功",
+        );
         // 发送下载开始事件
         let _ = DownloadEvent::ChapterStart { chapter_id, total }.emit(&self.app);
         // 逐一创建下载任务
@@ -156,6 +177,13 @@ impl DownloadManager {
         }
         // 等待所有下载任务完成
         join_set.join_all().await;
+        tracing::trace!(
+            chapter_id,
+            comic_title,
+            group_name,
+            chapter_title,
+            "所有图片下载任务完成"
+        );
         // 每个章节下载完成后，等待一段时间再下载下一个章节
         self.sleep_between_chapters(chapter_id).await;
         drop(permit);
@@ -178,6 +206,13 @@ impl DownloadManager {
             let _ = DownloadEvent::ChapterEnd { chapter_id }.emit(&self.app);
             return;
         }
+        tracing::trace!(
+            chapter_id,
+            comic_title,
+            group_name,
+            chapter_title,
+            "重命名临时下载目录`{temp_download_dir:?}`成功"
+        );
         // 章节下载成功
         tracing::info!(
             chapter_id,
@@ -216,6 +251,7 @@ impl DownloadManager {
         current: Arc<AtomicU32>,
     ) {
         // 下载图片
+        tracing::trace!(chapter_id, url, "图片开始排队");
         let permit = match self.img_sem.acquire().await.map_err(anyhow::Error::from) {
             Ok(permit) => permit,
             Err(err) => {
@@ -225,6 +261,7 @@ impl DownloadManager {
                 return;
             }
         };
+        tracing::trace!(chapter_id, url, "图片开始下载");
         let image_data = match self.manhuagui_client().get_image_bytes(&url).await {
             Ok(data) => data,
             Err(err) => {
@@ -235,6 +272,7 @@ impl DownloadManager {
             }
         };
         drop(permit);
+        tracing::trace!(chapter_id, url, "图片成功下载到内存");
         // 保存图片
         if let Err(err) = std::fs::write(&save_path, &image_data).map_err(anyhow::Error::from) {
             let err_title = format!("保存图片`{save_path:?}`失败");
@@ -242,9 +280,11 @@ impl DownloadManager {
             tracing::error!(err_title, message = string_chain);
             return;
         }
+        tracing::trace!(chapter_id, url, "图片成功保存到`{save_path:?}`");
         // 记录下载字节数
         self.byte_per_sec
             .fetch_add(image_data.len() as u64, Ordering::Relaxed);
+        tracing::debug!(chapter_id, url, "图片下载成功");
         // 更新章节下载进度
         let current = current.fetch_add(1, Ordering::Relaxed) + 1;
         // 发送下载图片成功事件
