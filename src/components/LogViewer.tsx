@@ -59,6 +59,7 @@ function LogViewer({ logViewerShowing, setLogViewerShowing }: Props) {
 
   useEffect(() => {
     commands.getLogsDirSize().then((result) => {
+      //　TODO: 应该移到then外面判断
       if (!logViewerShowing) {
         return
       }

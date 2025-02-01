@@ -25,7 +25,9 @@ pub fn greet(name: &str) -> String {
 #[specta::specta]
 #[allow(clippy::needless_pass_by_value)]
 pub fn get_config(config: tauri::State<RwLock<Config>>) -> Config {
-    config.read().clone()
+    let config = config.read().clone();
+    tracing::debug!("获取配置成功");
+    config
 }
 
 #[tauri::command(async)]
@@ -41,6 +43,7 @@ pub fn save_config(
     config_state
         .save(&app)
         .map_err(|err| CommandError::from("保存配置失败", err))?;
+    tracing::debug!("保存配置成功");
     Ok(())
 }
 
@@ -55,6 +58,7 @@ pub async fn login(
         .login(&username, &password)
         .await
         .map_err(|err| CommandError::from("使用账号密码登录失败", err))?;
+    tracing::debug!("登录成功");
     Ok(cookie)
 }
 
@@ -67,6 +71,7 @@ pub async fn get_user_profile(
         .get_user_profile()
         .await
         .map_err(|err| CommandError::from("获取用户信息失败", err))?;
+    tracing::debug!("获取用户信息成功");
     Ok(user_profile)
 }
 
@@ -81,6 +86,7 @@ pub async fn search(
         .search(&keyword, page_num)
         .await
         .map_err(|err| CommandError::from("搜索失败", err))?;
+    tracing::debug!("搜索成功");
     Ok(search_result)
 }
 
@@ -94,6 +100,7 @@ pub async fn get_comic(
         .get_comic(id)
         .await
         .map_err(|err| CommandError::from(&format!("获取漫画`{id}`的信息失败"), err))?;
+    tracing::debug!("获取漫画信息成功");
     Ok(comic)
 }
 
@@ -103,13 +110,14 @@ pub async fn download_chapters(
     download_manager: State<'_, DownloadManager>,
     chapters: Vec<ChapterInfo>,
 ) -> CommandResult<()> {
-    for ep in chapters {
-        let chapter_id = ep.chapter_id;
+    for chapter in chapters {
+        let chapter_id = chapter.chapter_id;
         download_manager
-            .submit_chapter(ep)
+            .submit_chapter(chapter)
             .await
             .map_err(|err| CommandError::from(&format!("下载章节`{chapter_id}`失败"), err))?;
     }
+    tracing::debug!("下载任务创建成功");
     Ok(())
 }
 
@@ -123,6 +131,7 @@ pub async fn get_favorite(
         .get_favorite(page_num)
         .await
         .map_err(|err| CommandError::from("获取收藏夹失败", err))?;
+    tracing::debug!("获取收藏夹成功");
     Ok(get_favorite_result)
 }
 
@@ -139,7 +148,7 @@ pub fn save_metadata(config: State<RwLock<Config>>, mut comic: Comic) -> Command
 
     let comic_title = &comic.title;
     let comic_json = serde_json::to_string_pretty(&comic)
-        .context(format!("将Comic序列化为json失败"))
+        .context("将Comic序列化为json失败")
         .map_err(|err| CommandError::from(&format!("`{comic_title}`的元数据保存失败"), err))?;
 
     let download_dir = config.read().download_dir.clone();
@@ -154,6 +163,7 @@ pub fn save_metadata(config: State<RwLock<Config>>, mut comic: Comic) -> Command
         .context(format!("写入文件`{metadata_path:?}`失败"))
         .map_err(|err| CommandError::from(&format!("`{comic_title}`的元数据保存失败"), err))?;
 
+    tracing::debug!("`{comic_title}`的元数据保存成功");
     Ok(())
 }
 
@@ -188,6 +198,7 @@ pub fn get_downloaded_comics(
         .filter_map(|(metadata_path, _)| Comic::from_metadata(&app, metadata_path).ok())
         .collect::<Vec<_>>();
 
+    tracing::debug!("获取已下载的漫画成功");
     Ok(downloaded_comics)
 }
 
@@ -198,6 +209,7 @@ pub fn export_cbz(app: AppHandle, comic: Comic) -> CommandResult<()> {
     let comic_title = comic.title.clone();
     export::cbz(&app, comic)
         .map_err(|err| CommandError::from(&format!("漫画`{comic_title}`导出cbz失败"), err))?;
+    tracing::debug!("漫画`{comic_title}`导出cbz成功");
     Ok(())
 }
 
@@ -208,6 +220,7 @@ pub fn export_pdf(app: AppHandle, comic: Comic) -> CommandResult<()> {
     let comic_title = comic.title.clone();
     export::pdf(&app, comic)
         .map_err(|err| CommandError::from(&format!("漫画`{comic_title}`导出pdf失败"), err))?;
+    tracing::debug!("漫画`{comic_title}`导出pdf成功");
     Ok(())
 }
 
@@ -276,6 +289,7 @@ pub async fn update_downloaded_comics(
     // 发送下载任务创建完成事件
     let _ = UpdateDownloadedComicsEvent::DownloadTaskCreated.emit(&app);
 
+    tracing::debug!("为已下载的漫画创建更新任务成功");
     Ok(())
 }
 
@@ -293,5 +307,6 @@ pub fn get_logs_dir_size(app: AppHandle) -> CommandResult<u64> {
         .filter_map(|entry| entry.metadata().ok())
         .map(|metadata| metadata.len())
         .sum::<u64>();
+    tracing::debug!("获取日志目录大小成功");
     Ok(logs_dir_size)
 }
