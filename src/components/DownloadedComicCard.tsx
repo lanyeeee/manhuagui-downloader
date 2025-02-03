@@ -1,6 +1,6 @@
 import { Comic, commands } from '../bindings.ts'
 import { CurrentTabName } from '../types.ts'
-import { App as AntdApp, Button, Card } from 'antd'
+import { Button, Card } from 'antd'
 import { useMemo } from 'react'
 
 interface GroupInfo {
@@ -16,7 +16,6 @@ interface Props {
 }
 
 function DownloadedComicCard({ comic, setPickedComic, setCurrentTabName }: Props) {
-  const { notification } = AntdApp.useApp()
   const groupInfos = useMemo(() => {
     const groups = comic.groups
 
@@ -41,7 +40,7 @@ function DownloadedComicCard({ comic, setPickedComic, setCurrentTabName }: Props
   async function exportCbz() {
     const result = await commands.exportCbz(comic)
     if (result.status === 'error') {
-      notification.error({ message: '导出cbz失败', description: result.error, duration: 0 })
+      console.error(result.error)
       return
     }
   }
@@ -49,7 +48,7 @@ function DownloadedComicCard({ comic, setPickedComic, setCurrentTabName }: Props
   async function exportPdf() {
     const result = await commands.exportPdf(comic)
     if (result.status === 'error') {
-      notification.error({ message: '导出pdf失败', description: result.error, duration: 0 })
+      console.error(result.error)
       return
     }
   }

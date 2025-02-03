@@ -1,6 +1,6 @@
 import { Comic, commands } from '../bindings.ts'
 import { CurrentTabName } from '../types.ts'
-import { App as AntdApp, Card } from 'antd'
+import { Card } from 'antd'
 
 interface Props {
   comicId: number
@@ -27,16 +27,10 @@ function ComicCard({
   setPickedComic,
   setCurrentTabName,
 }: Props) {
-  const { notification } = AntdApp.useApp()
-
   async function pickComic(id: number) {
     const result = await commands.getComic(id)
     if (result.status === 'error') {
-      notification.error({
-        message: '获取漫画信息失败',
-        description: result.error,
-        duration: 0,
-      })
+      console.error(result.error)
       return
     }
     console.log(result.data)
