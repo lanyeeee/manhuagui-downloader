@@ -42,7 +42,7 @@ function DownloadedPane({ config, setConfig, setPickedComic, currentTabName, set
 
     commands.getDownloadedComics().then(async (result) => {
       if (result.status === 'error') {
-        notification.error({ message: '获取本地库存失败', description: result.error, duration: 0 })
+        console.error(result.error)
         return
       }
 
@@ -222,10 +222,11 @@ function DownloadedPane({ config, setConfig, setPickedComic, currentTabName, set
   async function updateDownloadedComics() {
     const result = await commands.updateDownloadedComics()
     if (result.status === 'error') {
-      notification.error({ message: '更新已下载漫画失败', description: result.error, duration: 0 })
+      console.error(result.error)
     }
   }
 
+  // TODO: 这个操作不要在前端进行，交给后端
   async function revealExportDir() {
     try {
       await revealItemInDir(config.exportDir)

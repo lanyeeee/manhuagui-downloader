@@ -11,7 +11,7 @@ interface Props {
 }
 
 function SearchPane({ setPickedComic, setCurrentTabName }: Props) {
-  const { notification } = AntdApp.useApp()
+  const { message } = AntdApp.useApp()
 
   const [searchInput, setSearchInput] = useState<string>('')
   const [comicIdInput, setComicIdInput] = useState<string>('')
@@ -23,11 +23,7 @@ function SearchPane({ setPickedComic, setCurrentTabName }: Props) {
     setSearchPageNum(pageNum)
     const result = await commands.search(keyword, pageNum)
     if (result.status === 'error') {
-      notification.error({
-        message: '搜索失败',
-        description: result.error,
-        duration: 0,
-      })
+      console.error(result.error)
       return
     }
     setSearchResult(result.data)
@@ -52,21 +48,13 @@ function SearchPane({ setPickedComic, setCurrentTabName }: Props) {
     const comicId = getComicIdFromComicIdInput()
 
     if (comicId === undefined) {
-      notification.error({
-        message: '漫画ID格式错误',
-        description: '请输入漫画ID或漫画链接',
-        duration: 0,
-      })
+      message.error('漫画ID格式错误，请输入正确的漫画ID或漫画链接')
       return
     }
 
     const result = await commands.getComic(comicId)
     if (result.status === 'error') {
-      notification.error({
-        message: '获取漫画信息失败',
-        description: result.error,
-        duration: 0,
-      })
+      console.error(result.error)
       return
     }
     console.log(result.data)

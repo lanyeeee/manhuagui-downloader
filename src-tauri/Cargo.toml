@@ -26,7 +26,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1" }
 yaserde = { version = "0.11.2", features = ["yaserde_derive"] }
 
-specta = { version = "2.0.0-rc" }
+specta = { version = "2.0.0-rc", features = ["serde_json"] }
 specta-util = { version = "0.0.7", features = ["export"] }
 tauri-specta = { version = "2.0.0-rc", features = ["derive", "typescript"] }
 specta-typescript = { version = "0.0.7" }
@@ -47,7 +47,9 @@ rayon = { version = "1.10.0" }
 uuid = { version = "1.11.0" }
 lopdf = { git = "https://github.com/lanyeeee/lopdf", features = ["embed_image_jpeg"] }
 image = { version = "0.25.2", default-features = false, features = ["jpeg"] }
-
+tracing = { version = "0.1.41" }
+tracing-subscriber = { version = "0.3.19", features = ["json", "time", "local-time"] }
+tracing-appender = { version = "0.2.3" }
 
 [profile.release]
 strip = true
