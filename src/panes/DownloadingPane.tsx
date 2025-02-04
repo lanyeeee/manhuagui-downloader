@@ -1,7 +1,6 @@
 import { App as AntdApp, Button, Input, Progress } from 'antd'
-import { Config, events } from '../bindings.ts'
+import { commands, Config, events } from '../bindings.ts'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { revealItemInDir } from '@tauri-apps/plugin-opener'
 import { open } from '@tauri-apps/plugin-dialog'
 import SettingsDialog from '../components/SettingsDialog.tsx'
 
@@ -85,18 +84,11 @@ function DownloadingPane({ className, config, setConfig }: Props) {
             return new Map(next)
           })
         } else if (downloadEvent.event == 'ChapterEnd') {
-          const { chapterId, errMsg } = downloadEvent.data
+          const { chapterId } = downloadEvent.data
           setProgresses((prev) => {
             const progressData = prev.get(chapterId)
             if (progressData === undefined) {
               return prev
-            }
-            if (errMsg !== null) {
-              notificationRef.current.error({
-                message: `${progressData.comicTitle} - ${progressData.chapterTitle}下载章节失败`,
-                description: errMsg,
-                duration: 0,
-              })
             }
             const next = new Map(prev)
             next.delete(chapterId)
@@ -113,16 +105,6 @@ function DownloadingPane({ className, config, setConfig }: Props) {
             const percentage = Math.round((current / progressData.total) * 100)
             next.set(chapterId, { ...progressData, current, percentage, indicator: `${current}/${progressData.total}` })
             return new Map(next)
-          })
-        } else if (downloadEvent.event == 'ImageError') {
-          const { chapterId, errMsg } = downloadEvent.data
-          const progressData = progressesRef.current.get(chapterId)
-          if (progressData === undefined) {
-            return
-          }
-          notificationRef.current.error({
-            message: `${progressData.comicTitle} - ${progressData.chapterTitle}下载图片失败`,
-            description: errMsg,
           })
         } else if (downloadEvent.event == 'Speed') {
           const { speed } = downloadEvent.data
@@ -157,24 +139,10 @@ function DownloadingPane({ className, config, setConfig }: Props) {
     })
   }
 
-  async function revealDownloadDir() {
-    try {
-      await revealItemInDir(config.downloadDir)
-    } catch (error) {
-      if (typeof error === 'string') {
-        notification.error({
-          message: '打开下载目录失败',
-          description: `打开下载目录"${config.downloadDir}"失败: ${error}`,
-          duration: 0,
-        })
-      } else {
-        notification.error({
-          message: '打开下载目录失败',
-          description: `打开下载目录"${config.downloadDir}"失败，请联系开发者`,
-          duration: 0,
-        })
-        console.error(error)
-      }
+  async function showDownloadDirInFileManager() {
+    const result = await commands.showPathInFileManager(config.downloadDir)
+    if (result.status === 'error') {
+      console.error(result.error)
     }
   }
 
@@ -183,7 +151,7 @@ function DownloadingPane({ className, config, setConfig }: Props) {
       <span className="h-38px text-lg font-bold">下载列表</span>
       <div className="flex gap-col-1">
         <Input value={config.downloadDir} prefix="下载目录" size="small" readOnly onClick={selectDownloadDir} />
-        <Button size="small" onClick={revealDownloadDir}>
+        <Button size="small" onClick={showDownloadDirInFileManager}>
           打开目录
         </Button>
         <Button size="small" onClick={() => setSettingsDialogShowing(true)}>
