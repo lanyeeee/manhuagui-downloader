@@ -5,7 +5,6 @@ import { App as AntdApp, Button, Input, Pagination } from 'antd'
 import DownloadedComicCard from '../components/DownloadedComicCard.tsx'
 import { MessageInstance } from 'antd/es/message/interface'
 import { open } from '@tauri-apps/plugin-dialog'
-import { revealItemInDir } from '@tauri-apps/plugin-opener'
 
 interface ProgressData {
   comicTitle: string
@@ -226,25 +225,10 @@ function DownloadedPane({ config, setConfig, setPickedComic, currentTabName, set
     }
   }
 
-  // TODO: 这个操作不要在前端进行，交给后端
-  async function revealExportDir() {
-    try {
-      await revealItemInDir(config.exportDir)
-    } catch (error) {
-      if (typeof error === 'string') {
-        notification.error({
-          message: '打开导出目录失败',
-          description: `打开导出目录"${config.exportDir}"失败: ${error}`,
-          duration: 0,
-        })
-      } else {
-        notification.error({
-          message: '打开导出目录失败',
-          description: `打开导出目录"${config.exportDir}"失败，请联系开发者`,
-          duration: 0,
-        })
-        console.error(error)
-      }
+  async function showExportDirInFileManager() {
+    const result = await commands.showPathInFileManager(config.exportDir)
+    if (result.status === 'error') {
+      console.error(result.error)
     }
   }
 
@@ -252,7 +236,7 @@ function DownloadedPane({ config, setConfig, setPickedComic, currentTabName, set
     <div className="h-full flex flex-col overflow-auto">
       <div className="flex gap-col-1">
         <Input value={config.exportDir} prefix="导出目录" size="small" readOnly onClick={selectExportDir} />
-        <Button size="small" onClick={revealExportDir}>
+        <Button size="small" onClick={showExportDirInFileManager}>
           打开目录
         </Button>
         <Button size="small" onClick={updateDownloadedComics}>

@@ -1,8 +1,7 @@
-import { Config } from '../bindings.ts'
-import { App as AntdApp, Button, InputNumber, Modal } from 'antd'
+import { commands, Config } from '../bindings.ts'
+import { Button, InputNumber, Modal } from 'antd'
 import { path } from '@tauri-apps/api'
 import { appDataDir } from '@tauri-apps/api/path'
-import { revealItemInDir } from '@tauri-apps/plugin-opener'
 
 interface Props {
   settingsDialogShowing: boolean
@@ -12,27 +11,11 @@ interface Props {
 }
 
 function SettingsDialog({ settingsDialogShowing, setSettingsDialogShowing, config, setConfig }: Props) {
-  const { notification } = AntdApp.useApp()
-
-  async function revealConfigPath() {
+  async function showConfigPathInFileManager() {
     const configPath = await path.join(await appDataDir(), 'config.json')
-    try {
-      await revealItemInDir(configPath)
-    } catch (error) {
-      if (typeof error === 'string') {
-        notification.error({
-          message: '打开配置目录失败',
-          description: `打开配置目录"${configPath}失败: ${error}`,
-          duration: 0,
-        })
-      } else {
-        notification.error({
-          message: '打开配置目录失败',
-          description: `打开配置目录"${configPath}失败，请联系开发者`,
-          duration: 0,
-        })
-        console.error(error)
-      }
+    const result = await commands.showPathInFileManager(configPath)
+    if (result.status === 'error') {
+      console.error(result.error)
     }
   }
 
@@ -53,7 +36,7 @@ function SettingsDialog({ settingsDialogShowing, setSettingsDialogShowing, confi
           }}
         />
         <div className="flex justify-end mt-4">
-          <Button size="small" onClick={revealConfigPath}>
+          <Button size="small" onClick={showConfigPathInFileManager}>
             打开配置目录
           </Button>
         </div>

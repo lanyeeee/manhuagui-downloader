@@ -3,7 +3,6 @@ import { useEffect, useState, useMemo, useRef } from 'react'
 import { commands, events, LogEvent, LogLevel } from '../bindings.ts'
 import { path } from '@tauri-apps/api'
 import { appDataDir } from '@tauri-apps/api/path'
-import { revealItemInDir } from '@tauri-apps/plugin-opener'
 
 interface Props {
   logViewerShowing: boolean
@@ -144,26 +143,11 @@ function LogViewer({ logViewerShowing, setLogViewerShowing }: Props) {
     nextLogRecordId.current = 1
   }
 
-  // TODO: 这个操作不要在前端进行，交给后端
-  async function revealLogDir() {
-    const configPath = await path.join(await appDataDir(), '日志')
-    try {
-      await revealItemInDir(configPath)
-    } catch (error) {
-      if (typeof error === 'string') {
-        notification.error({
-          message: '打开配置目录失败',
-          description: `打开配置目录"${configPath}失败: ${error}`,
-          duration: 0,
-        })
-      } else {
-        notification.error({
-          message: '打开配置目录失败',
-          description: `打开配置目录"${configPath}失败，请联系开发者`,
-          duration: 0,
-        })
-        console.error(error)
-      }
+  async function showLogsDirInFileManager() {
+    const logsDir = await path.join(await appDataDir(), '日志')
+    const result = await commands.showPathInFileManager(logsDir)
+    if (result.status === 'error') {
+      console.error(result.error)
     }
   }
 
@@ -184,7 +168,7 @@ function LogViewer({ logViewerShowing, setLogViewerShowing }: Props) {
         />
         <Select value={selectedLevel} onChange={setSelectedLevel} options={logLevelOptions} style={{ width: 120 }} />
         <div className="flex flex-wrap gap-2 ml-auto">
-          <Button onClick={revealLogDir}>打开日志目录</Button>
+          <Button onClick={showLogsDirInFileManager}>打开日志目录</Button>
           <Button onClick={clearLogRecords} danger>
             清空日志浏览器
           </Button>

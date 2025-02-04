@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use anyhow::Context;
 use parking_lot::RwLock;
 use tauri::{AppHandle, Manager, State};
+use tauri_plugin_opener::OpenerExt;
 use tauri_specta::Event;
 
 use crate::{
@@ -309,4 +310,15 @@ pub fn get_logs_dir_size(app: AppHandle) -> CommandResult<u64> {
         .sum::<u64>();
     tracing::debug!("获取日志目录大小成功");
     Ok(logs_dir_size)
+}
+
+#[allow(clippy::needless_pass_by_value)]
+#[tauri::command(async)]
+#[specta::specta]
+pub fn show_path_in_file_manager(app: AppHandle, path: &str) -> CommandResult<()> {
+    app.opener()
+        .reveal_item_in_dir(path)
+        .context(format!("在文件管理器中打开`{path}`失败"))
+        .map_err(|err| CommandError::from("在文件管理器中打开失败", err))?;
+    Ok(())
 }

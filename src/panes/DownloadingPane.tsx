@@ -1,7 +1,6 @@
 import { App as AntdApp, Button, Input, Progress } from 'antd'
-import { Config, events } from '../bindings.ts'
+import { commands, Config, events } from '../bindings.ts'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { revealItemInDir } from '@tauri-apps/plugin-opener'
 import { open } from '@tauri-apps/plugin-dialog'
 import SettingsDialog from '../components/SettingsDialog.tsx'
 
@@ -140,25 +139,10 @@ function DownloadingPane({ className, config, setConfig }: Props) {
     })
   }
 
-  // TODO: 这个操作不要在前端进行，交给后端
-  async function revealDownloadDir() {
-    try {
-      await revealItemInDir(config.downloadDir)
-    } catch (error) {
-      if (typeof error === 'string') {
-        notification.error({
-          message: '打开下载目录失败',
-          description: `打开下载目录"${config.downloadDir}"失败: ${error}`,
-          duration: 0,
-        })
-      } else {
-        notification.error({
-          message: '打开下载目录失败',
-          description: `打开下载目录"${config.downloadDir}"失败，请联系开发者`,
-          duration: 0,
-        })
-        console.error(error)
-      }
+  async function showDownloadDirInFileManager() {
+    const result = await commands.showPathInFileManager(config.downloadDir)
+    if (result.status === 'error') {
+      console.error(result.error)
     }
   }
 
@@ -167,7 +151,7 @@ function DownloadingPane({ className, config, setConfig }: Props) {
       <span className="h-38px text-lg font-bold">下载列表</span>
       <div className="flex gap-col-1">
         <Input value={config.downloadDir} prefix="下载目录" size="small" readOnly onClick={selectDownloadDir} />
-        <Button size="small" onClick={revealDownloadDir}>
+        <Button size="small" onClick={showDownloadDirInFileManager}>
           打开目录
         </Button>
         <Button size="small" onClick={() => setSettingsDialogShowing(true)}>
