@@ -11,7 +11,9 @@ use crate::{
     download_manager::DownloadManager,
     errors::{CommandError, CommandResult},
     events::UpdateDownloadedComicsEvent,
-    export, logger,
+    export,
+    extensions::AnyhowErrorToStringChain,
+    logger,
     manhuagui_client::ManhuaguiClient,
     types::{ChapterInfo, Comic, GetFavoriteResult, SearchResult, UserProfile},
 };
@@ -195,8 +197,17 @@ pub fn get_downloaded_comics(
     // 从元数据文件中读取Comic
     let downloaded_comics = metadata_path_with_modify_time
         .iter()
-        // TODO: 如果读取元数据失败，应该发送错误Event通知前端，然后才跳过
-        .filter_map(|(metadata_path, _)| Comic::from_metadata(&app, metadata_path).ok())
+        .filter_map(|(metadata_path, _)| {
+            match Comic::from_metadata(&app, metadata_path).map_err(anyhow::Error::from) {
+                Ok(comic) => Some(comic),
+                Err(err) => {
+                    let err_title = format!("读取元数据文件`{metadata_path:?}`失败");
+                    let string_chain = err.to_string_chain();
+                    tracing::error!(err_title, message = string_chain);
+                    None
+                }
+            }
+        })
         .collect::<Vec<_>>();
 
     tracing::debug!("获取已下载的漫画成功");
