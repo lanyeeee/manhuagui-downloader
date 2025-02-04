@@ -21,7 +21,7 @@ interface Props {
 }
 
 function ChapterPane({ pickedComic, setPickedComic }: Props) {
-  const { message, notification } = AntdApp.useApp()
+  const { message } = AntdApp.useApp()
   // 按章节数排序的分组
   const sortedGroups = useMemo<[string, ChapterInfo[]][] | undefined>(() => {
     const groups = pickedComic?.groups
@@ -67,11 +67,7 @@ function ChapterPane({ pickedComic, setPickedComic }: Props) {
     // 创建下载任务前，先创建元数据
     const saveMetadataResult = await commands.saveMetadata(pickedComic)
     if (saveMetadataResult.status === 'error') {
-      notification.error({
-        message: '保存元数据失败',
-        description: saveMetadataResult.error,
-        duration: 0,
-      })
+      console.error(saveMetadataResult.error)
       return
     }
     // 下载没有下载过的且已勾选的章节
@@ -81,11 +77,7 @@ function ChapterPane({ pickedComic, setPickedComic }: Props) {
     }
     const result = await commands.downloadChapters(chapterToDownload)
     if (result.status === 'error') {
-      notification.error({
-        message: '下载失败',
-        description: result.error,
-        duration: 0,
-      })
+      console.error(result.error)
       return
     }
     // 把已下载的章节从已勾选的章节id中移除

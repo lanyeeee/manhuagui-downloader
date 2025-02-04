@@ -10,7 +10,7 @@ interface Props {
 }
 
 function LoginDialog({ loginDialogShowing, setLoginDialogShowing, config, setConfig }: Props) {
-  const { message, notification } = AntdApp.useApp()
+  const { message } = AntdApp.useApp()
 
   const [username, setUsername] = useState<string>('')
   const [password, setPassword] = useState<string>('')
@@ -31,11 +31,7 @@ function LoginDialog({ loginDialogShowing, setLoginDialogShowing, config, setCon
     const result = await commands.login(username, password)
     message.destroy(key)
     if (result.status === 'error') {
-      notification.error({
-        message: '登录失败',
-        description: result.error,
-        duration: 0,
-      })
+      console.error(result.error)
       return
     }
 
