@@ -331,5 +331,6 @@ pub fn show_path_in_file_manager(app: AppHandle, path: &str) -> CommandResult<()
         .reveal_item_in_dir(path)
         .context(format!("在文件管理器中打开`{path}`失败"))
         .map_err(|err| CommandError::from("在文件管理器中打开失败", err))?;
+    tracing::debug!("在文件管理器中打开成功");
     Ok(())
 }
