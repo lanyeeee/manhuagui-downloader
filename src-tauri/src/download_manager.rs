@@ -12,85 +12,37 @@ use parking_lot::RwLock;
 use tauri::{AppHandle, Manager};
 use tauri_specta::Event;
 use tokio::time::sleep;
-use tokio::{
-    sync::{mpsc, Semaphore},
-    task::JoinSet,
-};
+use tokio::{sync::Semaphore, task::JoinSet};
 
 use crate::{
     config::Config, events::DownloadEvent, extensions::AnyhowErrorToStringChain,
     manhuagui_client::ManhuaguiClient, types::ChapterInfo,
 };
 
-/// 用于管理下载任务
-///
-/// 克隆 `DownloadManager` 的开销极小，性能开销几乎可以忽略不计。
-/// 可以放心地在多个线程中传递和使用它的克隆副本。
-///
-/// 具体来说：
-/// - `app` 是 `AppHandle` 类型，根据 `Tauri` 文档，它的克隆开销是极小的。
-/// - 其他字段都被 `Arc` 包裹，这些字段的克隆操作仅仅是增加引用计数。
 #[derive(Clone)]
-pub struct DownloadManager {
+pub struct DownloadTask {
     app: AppHandle,
-    sender: Arc<mpsc::Sender<ChapterInfo>>,
-    chapter_sem: Arc<Semaphore>,
-    img_sem: Arc<Semaphore>,
-    byte_per_sec: Arc<AtomicU64>,
+    download_manager: DownloadManager,
+    chapter_info: ChapterInfo,
 }
 
-impl DownloadManager {
-    pub fn new(app: &AppHandle) -> Self {
-        let (sender, receiver) = mpsc::channel::<ChapterInfo>(32);
-
-        let manager = DownloadManager {
-            app: app.clone(),
-            sender: Arc::new(sender),
-            chapter_sem: Arc::new(Semaphore::new(1)),
-            img_sem: Arc::new(Semaphore::new(10)),
-            byte_per_sec: Arc::new(AtomicU64::new(0)),
-        };
-
-        tauri::async_runtime::spawn(Self::log_download_speed(app.clone()));
-        tauri::async_runtime::spawn(Self::receiver_loop(app.clone(), receiver));
-
-        manager
-    }
-
-    pub async fn submit_chapter(&self, chapter_info: ChapterInfo) -> anyhow::Result<()> {
-        self.sender.send(chapter_info).await?;
-        Ok(())
-    }
-
-    #[allow(clippy::cast_precision_loss)]
-    async fn log_download_speed(app: AppHandle) {
-        let mut interval = tokio::time::interval(Duration::from_secs(1));
-
-        loop {
-            interval.tick().await;
-            let manager = app.state::<DownloadManager>();
-            let byte_per_sec = manager.byte_per_sec.swap(0, Ordering::Relaxed);
-            let mega_byte_per_sec = byte_per_sec as f64 / 1024.0 / 1024.0;
-            let speed = format!("{mega_byte_per_sec:.2} MB/s");
-            // 发送总进度条下载速度事件
-            let _ = DownloadEvent::Speed { speed }.emit(&app);
-        }
-    }
-
-    async fn receiver_loop(app: AppHandle, mut receiver: mpsc::Receiver<ChapterInfo>) {
-        while let Some(chapter_info) = receiver.recv().await {
-            let manager = app.state::<DownloadManager>().inner().clone();
-            tauri::async_runtime::spawn(manager.process_chapter(chapter_info));
+impl DownloadTask {
+    pub fn new(app: AppHandle, chapter_info: ChapterInfo) -> Self {
+        let download_manager = app.state::<DownloadManager>().inner().clone();
+        Self {
+            app,
+            download_manager,
+            chapter_info,
         }
     }
 
     #[allow(clippy::cast_possible_truncation)]
     #[allow(clippy::too_many_lines)] // TODO: 重构此方法，减少代码行数
-    async fn process_chapter(self, chapter_info: ChapterInfo) {
-        let chapter_id = chapter_info.chapter_id;
-        let comic_title = &chapter_info.comic_title;
-        let group_name = &chapter_info.group_name;
-        let chapter_title = &chapter_info.chapter_title;
+    async fn process(self) {
+        let chapter_id = self.chapter_info.chapter_id;
+        let comic_title = &self.chapter_info.comic_title;
+        let group_name = &self.chapter_info.group_name;
+        let chapter_title = &self.chapter_info.chapter_title;
         let err_prefix = format!("`{comic_title} - {group_name} - {chapter_title}`");
         // 发送章节排队事件
         let _ = DownloadEvent::ChapterPending {
@@ -108,6 +60,7 @@ impl DownloadManager {
         );
         // 限制同时下载的章节数量
         let permit = match self
+            .download_manager
             .chapter_sem
             .acquire()
             .await
@@ -131,7 +84,11 @@ impl DownloadManager {
             "章节开始获取图片链接"
         );
         // 获取此章节每张图片的下载链接
-        let urls = match self.manhuagui_client().get_image_urls(&chapter_info).await {
+        let urls = match self
+            .manhuagui_client()
+            .get_image_urls(&self.chapter_info)
+            .await
+        {
             Ok(urls) => urls,
             Err(err) => {
                 let err_title = format!("{err_prefix}获取图片链接失败");
@@ -148,7 +105,7 @@ impl DownloadManager {
         let downloaded_count = Arc::new(AtomicU32::new(0));
         let mut join_set = JoinSet::new();
         // 创建临时下载目录
-        let temp_download_dir = get_temp_download_dir(&self.app, &chapter_info);
+        let temp_download_dir = get_temp_download_dir(&self.app, &self.chapter_info);
         if let Err(err) = std::fs::create_dir_all(&temp_download_dir).map_err(anyhow::Error::from) {
             let err_title = format!("{err_prefix}创建目录`{temp_download_dir:?}`失败");
             let string_chain = err.to_string_chain();
@@ -198,7 +155,7 @@ impl DownloadManager {
             let _ = DownloadEvent::ChapterEnd { chapter_id }.emit(&self.app);
             return;
         }
-        if let Err(err) = rename_temp_download_dir(&chapter_info, &temp_download_dir) {
+        if let Err(err) = rename_temp_download_dir(&self.chapter_info, &temp_download_dir) {
             let err_title = format!("{err_prefix}重命名临时目录失败");
             let string_chain = err.to_string_chain();
             tracing::error!(err_title, message = string_chain);
@@ -225,24 +182,6 @@ impl DownloadManager {
         let _ = DownloadEvent::ChapterEnd { chapter_id }.emit(&self.app);
     }
 
-    async fn sleep_between_chapters(&self, chapter_id: i64) {
-        let mut remaining_sec = self
-            .app
-            .state::<RwLock<Config>>()
-            .read()
-            .download_interval_sec;
-        while remaining_sec > 0 {
-            // 发送章节休眠事件
-            let _ = DownloadEvent::ChapterSleeping {
-                chapter_id,
-                remaining_sec,
-            }
-            .emit(&self.app);
-            sleep(Duration::from_secs(1)).await;
-            remaining_sec -= 1;
-        }
-    }
-
     async fn download_image(
         self,
         url: String,
@@ -252,7 +191,13 @@ impl DownloadManager {
     ) {
         // 下载图片
         tracing::trace!(chapter_id, url, "图片开始排队");
-        let permit = match self.img_sem.acquire().await.map_err(anyhow::Error::from) {
+        let permit = match self
+            .download_manager
+            .img_sem
+            .acquire()
+            .await
+            .map_err(anyhow::Error::from)
+        {
             Ok(permit) => permit,
             Err(err) => {
                 let err_title = "获取下载图片的semaphore失败";
@@ -282,7 +227,8 @@ impl DownloadManager {
         }
         tracing::trace!(chapter_id, url, "图片成功保存到`{save_path:?}`");
         // 记录下载字节数
-        self.byte_per_sec
+        self.download_manager
+            .byte_per_sec
             .fetch_add(image_data.len() as u64, Ordering::Relaxed);
         tracing::debug!(chapter_id, url, "图片下载成功");
         // 更新章节下载进度
@@ -296,8 +242,78 @@ impl DownloadManager {
         .emit(&self.app);
     }
 
+    async fn sleep_between_chapters(&self, chapter_id: i64) {
+        let mut remaining_sec = self
+            .app
+            .state::<RwLock<Config>>()
+            .read()
+            .download_interval_sec;
+        while remaining_sec > 0 {
+            // 发送章节休眠事件
+            let _ = DownloadEvent::ChapterSleeping {
+                chapter_id,
+                remaining_sec,
+            }
+            .emit(&self.app);
+            sleep(Duration::from_secs(1)).await;
+            remaining_sec -= 1;
+        }
+    }
+
     fn manhuagui_client(&self) -> ManhuaguiClient {
         self.app.state::<ManhuaguiClient>().inner().clone()
+    }
+}
+
+/// 用于管理下载任务
+///
+/// 克隆 `DownloadManager` 的开销极小，性能开销几乎可以忽略不计。
+/// 可以放心地在多个线程中传递和使用它的克隆副本。
+///
+/// 具体来说：
+/// - `app` 是 `AppHandle` 类型，根据 `Tauri` 文档，它的克隆开销是极小的。
+/// - 其他字段都被 `Arc` 包裹，这些字段的克隆操作仅仅是增加引用计数。
+#[derive(Clone)]
+pub struct DownloadManager {
+    app: AppHandle,
+    chapter_sem: Arc<Semaphore>,
+    img_sem: Arc<Semaphore>,
+    byte_per_sec: Arc<AtomicU64>,
+}
+
+impl DownloadManager {
+    pub fn new(app: &AppHandle) -> Self {
+        let manager = DownloadManager {
+            app: app.clone(),
+            chapter_sem: Arc::new(Semaphore::new(1)),
+            img_sem: Arc::new(Semaphore::new(10)),
+            byte_per_sec: Arc::new(AtomicU64::new(0)),
+        };
+
+        tauri::async_runtime::spawn(Self::log_download_speed(app.clone()));
+
+        manager
+    }
+
+    pub async fn create_download_task(&self, chapter_info: ChapterInfo) -> anyhow::Result<()> {
+        let task = DownloadTask::new(self.app.clone(), chapter_info);
+        tauri::async_runtime::spawn(task.process());
+        Ok(())
+    }
+
+    #[allow(clippy::cast_precision_loss)]
+    async fn log_download_speed(app: AppHandle) {
+        let mut interval = tokio::time::interval(Duration::from_secs(1));
+
+        loop {
+            interval.tick().await;
+            let manager = app.state::<DownloadManager>();
+            let byte_per_sec = manager.byte_per_sec.swap(0, Ordering::Relaxed);
+            let mega_byte_per_sec = byte_per_sec as f64 / 1024.0 / 1024.0;
+            let speed = format!("{mega_byte_per_sec:.2} MB/s");
+            // 发送总进度条下载速度事件
+            let _ = DownloadEvent::Speed { speed }.emit(&app);
+        }
     }
 }
 
