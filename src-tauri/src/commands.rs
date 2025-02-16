@@ -116,7 +116,7 @@ pub async fn download_chapters(
     for chapter in chapters {
         let chapter_id = chapter.chapter_id;
         download_manager
-            .submit_chapter(chapter)
+            .create_download_task(chapter)
             .await
             .map_err(|err| CommandError::from(&format!("下载章节`{chapter_id}`失败"), err))?;
     }
