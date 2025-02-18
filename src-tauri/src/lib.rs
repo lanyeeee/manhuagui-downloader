@@ -46,6 +46,9 @@ pub fn run() {
             update_downloaded_comics,
             get_logs_dir_size,
             show_path_in_file_manager,
+            pause_download_task,
+            resume_download_task,
+            cancel_download_task,
         ])
         .events(tauri_specta::collect_events![
             DownloadEvent,

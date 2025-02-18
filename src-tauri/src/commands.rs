@@ -107,21 +107,14 @@ pub async fn get_comic(
     Ok(comic)
 }
 
+#[allow(clippy::needless_pass_by_value)]
 #[tauri::command(async)]
 #[specta::specta]
-pub async fn download_chapters(
-    download_manager: State<'_, DownloadManager>,
-    chapters: Vec<ChapterInfo>,
-) -> CommandResult<()> {
+pub fn download_chapters(download_manager: State<DownloadManager>, chapters: Vec<ChapterInfo>) {
     for chapter in chapters {
-        let chapter_id = chapter.chapter_id;
-        download_manager
-            .create_download_task(chapter)
-            .await
-            .map_err(|err| CommandError::from(&format!("下载章节`{chapter_id}`失败"), err))?;
+        download_manager.create_download_task(chapter);
     }
     tracing::debug!("下载任务创建成功");
-    Ok(())
 }
 
 #[tauri::command(async)]
@@ -297,7 +290,7 @@ pub async fn update_downloaded_comics(
         })
         .collect::<Vec<_>>();
     // 下载未下载章节
-    download_chapters(download_manager, chapters_to_download).await?;
+    download_chapters(download_manager, chapters_to_download);
     // 发送下载任务创建完成事件
     let _ = UpdateDownloadedComicsEvent::DownloadTaskCreated.emit(&app);
 
@@ -332,5 +325,51 @@ pub fn show_path_in_file_manager(app: AppHandle, path: &str) -> CommandResult<()
         .context(format!("在文件管理器中打开`{path}`失败"))
         .map_err(|err| CommandError::from("在文件管理器中打开失败", err))?;
     tracing::debug!("在文件管理器中打开成功");
+    Ok(())
+}
+
+#[allow(clippy::needless_pass_by_value)]
+#[tauri::command(async)]
+#[specta::specta]
+pub fn pause_download_task(
+    download_manager: State<DownloadManager>,
+    chapter_id: i64,
+) -> CommandResult<()> {
+    download_manager
+        .pause_download_task(chapter_id)
+        .map_err(|err| CommandError::from(&format!("暂停章节ID为`{chapter_id}`的下载任务"), err))?;
+    tracing::debug!("暂停章节ID为`{chapter_id}`的下载任务成功");
+    Ok(())
+}
+
+#[allow(clippy::needless_pass_by_value)]
+#[tauri::command(async)]
+#[specta::specta]
+pub fn resume_download_task(
+    download_manager: State<DownloadManager>,
+    chapter_id: i64,
+) -> CommandResult<()> {
+    download_manager
+        .resume_download_task(chapter_id)
+        .map_err(|err| {
+            CommandError::from(&format!("恢复章节ID为`{chapter_id}`的下载任务失败"), err)
+        })?;
+    tracing::debug!("恢复章节ID为`{chapter_id}`的下载任务成功");
+    Ok(())
+}
+
+#[allow(clippy::needless_pass_by_value)]
+#[tauri::command(async)]
+#[specta::specta]
+pub fn cancel_download_task(
+    download_manager: State<DownloadManager>,
+    chapter_id: i64,
+) -> CommandResult<()> {
+    download_manager
+        .cancel_download_task(chapter_id)
+        .map_err(|err| {
+            CommandError::from(&format!("取消章节ID为`{chapter_id}`的下载任务失败"), err)
+        })?;
+    tracing::debug!("取消章节ID为`{chapter_id}`的下载任务成功");
     Ok(())
 }
