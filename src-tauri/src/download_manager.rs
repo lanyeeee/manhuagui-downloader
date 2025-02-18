@@ -11,6 +11,8 @@ use std::{
 
 use anyhow::{anyhow, Context};
 use parking_lot::RwLock;
+use serde::{Deserialize, Serialize};
+use specta::Type;
 use tauri::{AppHandle, Manager};
 use tauri_specta::Event;
 use tokio::{
@@ -20,8 +22,11 @@ use tokio::{
 };
 
 use crate::{
-    config::Config, events::DownloadEvent, extensions::AnyhowErrorToStringChain,
-    manhuagui_client::ManhuaguiClient, types::ChapterInfo,
+    config::Config,
+    events::{DownloadEvent, DownloadTaskEvent},
+    extensions::AnyhowErrorToStringChain,
+    manhuagui_client::ManhuaguiClient,
+    types::ChapterInfo,
 };
 
 /// 用于管理下载任务
@@ -106,13 +111,14 @@ impl DownloadManager {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum DownloadTaskState {
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub enum DownloadTaskState {
     Pending,
     Downloading,
     Paused,
     Cancelled,
     Completed,
+    Failed,
 }
 
 #[derive(Clone)]
@@ -211,8 +217,10 @@ impl DownloadTask {
             let err_msg =
                 format!("总共有`{total_img_count}`张图片，但只下载了`{downloaded_img_count}`张");
             tracing::error!(err_title, message = err_msg);
-            // 发送章节下载结束事件
-            let _ = DownloadEvent::ChapterEnd { chapter_id }.emit(&self.app);
+
+            self.set_state(DownloadTaskState::Failed);
+            self.emit_download_task_event();
+
             return;
         }
         if let Err(err) = self.rename_temp_download_dir(&temp_download_dir) {
@@ -220,8 +228,10 @@ impl DownloadTask {
                 format!("`{comic_title} - {group_name} - {chapter_title}`重命名临时目录失败");
             let string_chain = err.to_string_chain();
             tracing::error!(err_title, message = string_chain);
-            // 发送章节下载结束事件
-            let _ = DownloadEvent::ChapterEnd { chapter_id }.emit(&self.app);
+
+            self.set_state(DownloadTaskState::Failed);
+            self.emit_download_task_event();
+
             return;
         }
         tracing::trace!(
@@ -242,8 +252,8 @@ impl DownloadTask {
         // 每个章节下载完成后，等待一段时间
         self.sleep_between_chapters().await;
         // 发送下载结束事件
-        let _ = DownloadEvent::ChapterEnd { chapter_id }.emit(&self.app);
         self.set_state(DownloadTaskState::Completed);
+        self.emit_download_task_event();
     }
 
     async fn acquire_chapter_permit<'a>(
@@ -262,13 +272,8 @@ impl DownloadTask {
             chapter_title,
             "章节开始排队"
         );
-        // 发送章节排队事件
-        let _ = DownloadEvent::ChapterPending {
-            chapter_id,
-            comic_title: comic_title.clone(),
-            chapter_title: chapter_title.clone(),
-        }
-        .emit(&self.app);
+
+        self.emit_download_task_event();
 
         *permit = match permit.take() {
             // 如果有permit，则直接用
@@ -288,8 +293,10 @@ impl DownloadTask {
                     );
                     let string_chain = err.to_string_chain();
                     tracing::error!(err_title, message = string_chain);
-                    // 发送章节下载结束事件
-                    let _ = DownloadEvent::ChapterEnd { chapter_id }.emit(&self.app);
+
+                    self.set_state(DownloadTaskState::Failed);
+                    self.emit_download_task_event();
+
                     return ControlFlow::Break(());
                 }
             },
@@ -320,6 +327,7 @@ impl DownloadTask {
         let group_name = &self.chapter_info.group_name;
         let chapter_title = &self.chapter_info.chapter_title;
 
+        self.emit_download_task_event();
         let state = *state_receiver.borrow();
         match state {
             DownloadTaskState::Paused => {
@@ -343,7 +351,6 @@ impl DownloadTask {
                     chapter_title,
                     "章节取消下载"
                 );
-                let _ = DownloadEvent::ChapterEnd { chapter_id }.emit(&self.app);
                 ControlFlow::Break(())
             }
             _ => ControlFlow::Continue(()),
@@ -374,8 +381,10 @@ impl DownloadTask {
                     format!("`{comic_title} - {group_name} - {chapter_title}`获取图片链接失败");
                 let string_chain = err.to_string_chain();
                 tracing::error!(err_title, message = string_chain);
-                // 发送下载结束事件
-                let _ = DownloadEvent::ChapterEnd { chapter_id }.emit(&self.app);
+
+                self.set_state(DownloadTaskState::Failed);
+                self.emit_download_task_event();
+
                 return None;
             }
         };
@@ -402,8 +411,10 @@ impl DownloadTask {
             let err_title = format!("`{comic_title} - {group_name} - {chapter_title}`创建目录`{temp_download_dir:?}`失败");
             let string_chain = err.to_string_chain();
             tracing::error!(err_title, message = string_chain);
-            // 发送下载结束事件
-            let _ = DownloadEvent::ChapterEnd { chapter_id }.emit(&self.app);
+
+            self.set_state(DownloadTaskState::Failed);
+            self.emit_download_task_event();
+
             return None;
         }
         tracing::trace!(
@@ -444,7 +455,7 @@ impl DownloadTask {
             .download_interval_sec;
         while remaining_sec > 0 {
             // 发送章节休眠事件
-            let _ = DownloadEvent::ChapterSleeping {
+            let _ = DownloadEvent::Sleeping {
                 chapter_id,
                 remaining_sec,
             }
@@ -466,6 +477,15 @@ impl DownloadTask {
         }
     }
 
+    fn emit_download_task_event(&self) {
+        let _ = DownloadTaskEvent {
+            state: *self.state_sender.borrow(),
+            chapter_info: self.chapter_info.as_ref().clone(),
+            downloaded_img_count: self.downloaded_img_count.load(Ordering::Relaxed),
+            total_img_count: self.total_img_count.load(Ordering::Relaxed),
+        }
+        .emit(&self.app);
+    }
     fn manhuagui_client(&self) -> ManhuaguiClient {
         self.app.state::<ManhuaguiClient>().inner().clone()
     }
@@ -573,15 +593,12 @@ impl DownloadImgTask {
             .byte_per_sec
             .fetch_add(img_data.len() as u64, Ordering::Relaxed);
         tracing::debug!(chapter_id, url, "图片下载成功");
-        // 更新章节下载进度
-        let current = self.downloaded_img_count.fetch_add(1, Ordering::Relaxed) + 1;
-        let total = self.total_img_count.load(Ordering::Relaxed);
-        // 发送下载图片成功事件
-        let _ = DownloadEvent::ImageSuccess {
-            chapter_id,
-            url: url.clone(),
-            current,
-            total,
+
+        let _ = DownloadTaskEvent {
+            state: *self.state_sender.borrow(),
+            chapter_info: self.chapter_info.as_ref().clone(),
+            downloaded_img_count: self.downloaded_img_count.fetch_add(1, Ordering::Relaxed) + 1,
+            total_img_count: self.total_img_count.load(Ordering::Relaxed),
         }
         .emit(&self.app);
     }

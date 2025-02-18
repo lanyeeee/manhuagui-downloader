@@ -14,7 +14,8 @@ mod utils;
 use config::Config;
 use download_manager::DownloadManager;
 use events::{
-    DownloadEvent, ExportCbzEvent, ExportPdfEvent, LogEvent, UpdateDownloadedComicsEvent,
+    DownloadEvent, ExportCbzEvent, ExportPdfEvent, LogEvent, DownloadTaskEvent,
+    UpdateDownloadedComicsEvent,
 };
 use manhuagui_client::ManhuaguiClient;
 use parking_lot::RwLock;
@@ -56,6 +57,7 @@ pub fn run() {
             ExportPdfEvent,
             UpdateDownloadedComicsEvent,
             LogEvent,
+            DownloadTaskEvent,
         ]);
 
     #[cfg(debug_assertions)]
