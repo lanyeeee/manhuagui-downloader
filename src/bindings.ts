@@ -51,13 +51,8 @@ async getComic(id: number) : Promise<Result<Comic, CommandError>> {
     else return { status: "error", error: e  as any };
 }
 },
-async downloadChapters(chapters: ChapterInfo[]) : Promise<Result<null, CommandError>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("download_chapters", { chapters }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
+async downloadChapters(chapters: ChapterInfo[]) : Promise<void> {
+    await TAURI_INVOKE("download_chapters", { chapters });
 },
 async getFavorite(pageNum: number) : Promise<Result<GetFavoriteResult, CommandError>> {
     try {
@@ -118,6 +113,30 @@ async getLogsDirSize() : Promise<Result<number, CommandError>> {
 async showPathInFileManager(path: string) : Promise<Result<null, CommandError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("show_path_in_file_manager", { path }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async pauseDownloadTask(chapterId: number) : Promise<Result<null, CommandError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("pause_download_task", { chapterId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async resumeDownloadTask(chapterId: number) : Promise<Result<null, CommandError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("resume_download_task", { chapterId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async cancelDownloadTask(chapterId: number) : Promise<Result<null, CommandError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("cancel_download_task", { chapterId }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -322,7 +341,7 @@ aliases: string[];
 intro: string }
 export type CommandError = { err_title: string; err_message: string }
 export type Config = { cookie: string; downloadDir: string; exportDir: string; downloadIntervalSec: number }
-export type DownloadEvent = { event: "ChapterPending"; data: { chapterId: number; comicTitle: string; chapterTitle: string } } | { event: "ChapterStart"; data: { chapterId: number; total: number } } | { event: "ChapterSleeping"; data: { chapterId: number; remainingSec: number } } | { event: "ChapterEnd"; data: { chapterId: number } } | { event: "ImageSuccess"; data: { chapterId: number; url: string; current: number } } | { event: "Speed"; data: { speed: string } }
+export type DownloadEvent = { event: "ChapterPending"; data: { chapterId: number; comicTitle: string; chapterTitle: string } } | { event: "ChapterSleeping"; data: { chapterId: number; remainingSec: number } } | { event: "ChapterEnd"; data: { chapterId: number } } | { event: "ImageSuccess"; data: { chapterId: number; url: string; current: number; total: number } } | { event: "Speed"; data: { speed: string } }
 export type ExportCbzEvent = { event: "Start"; data: { uuid: string; comicTitle: string; total: number } } | { event: "Progress"; data: { uuid: string; current: number } } | { event: "End"; data: { uuid: string } }
 export type ExportPdfEvent = { event: "CreateStart"; data: { uuid: string; comicTitle: string; total: number } } | { event: "CreateProgress"; data: { uuid: string; current: number } } | { event: "CreateEnd"; data: { uuid: string } } | { event: "MergeStart"; data: { uuid: string; comicTitle: string; total: number } } | { event: "MergeProgress"; data: { uuid: string; current: number } } | { event: "MergeEnd"; data: { uuid: string } }
 export type GetFavoriteResult = { comics: ComicInFavorite[]; current: number; total: number }

@@ -50,7 +50,6 @@ function DownloadingPane({ className, config, setConfig }: Props) {
     events.downloadEvent
       .listen(({ payload: downloadEvent }) => {
         if (downloadEvent.event == 'ChapterPending') {
-          console.log(downloadEvent)
           const { chapterId, comicTitle, chapterTitle } = downloadEvent.data
           const progressData: ProgressData = {
             comicTitle,
@@ -61,17 +60,6 @@ function DownloadingPane({ className, config, setConfig }: Props) {
             indicator: '等待中',
           }
           setProgresses((prev) => new Map(prev).set(chapterId, progressData))
-        } else if (downloadEvent.event == 'ChapterStart') {
-          const { chapterId, total } = downloadEvent.data
-          setProgresses((prev) => {
-            const progressData = prev.get(chapterId)
-            if (progressData === undefined) {
-              return prev
-            }
-            const next = new Map(prev)
-            next.set(chapterId, { ...progressData, total, indicator: `0/${total}` })
-            return new Map(next)
-          })
         } else if (downloadEvent.event === 'ChapterSleeping') {
           const { chapterId, remainingSec } = downloadEvent.data
           setProgresses((prev) => {
@@ -95,15 +83,15 @@ function DownloadingPane({ className, config, setConfig }: Props) {
             return new Map(next)
           })
         } else if (downloadEvent.event == 'ImageSuccess') {
-          const { chapterId, current } = downloadEvent.data
+          const { chapterId, current, total } = downloadEvent.data
           setProgresses((prev) => {
             const progressData = prev.get(chapterId)
             if (progressData === undefined) {
               return prev
             }
             const next = new Map(prev)
-            const percentage = Math.round((current / progressData.total) * 100)
-            next.set(chapterId, { ...progressData, current, percentage, indicator: `${current}/${progressData.total}` })
+            const percentage = Math.round((current / total) * 100)
+            next.set(chapterId, { ...progressData, current, total, percentage, indicator: `${current}/${total}` })
             return new Map(next)
           })
         } else if (downloadEvent.event == 'Speed') {
