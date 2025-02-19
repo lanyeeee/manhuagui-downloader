@@ -1,10 +1,11 @@
-import { App as AntdApp, Button, Input, Progress } from 'antd'
-import { commands, Config, DownloadTaskEvent, DownloadTaskState, events } from '../bindings.ts'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { Button, Input, Tabs, TabsProps } from 'antd'
+import { commands, Config, events } from '../bindings.ts'
+import { useEffect, useMemo, useState } from 'react'
 import { open } from '@tauri-apps/plugin-dialog'
 import SettingsDialog from '../components/SettingsDialog.tsx'
-
-type ProgressData = DownloadTaskEvent & { percentage: number; indicator: string }
+import { ProgressData } from '../types.ts'
+import UncompletedProgresses from '../components/UncompletedProgresses.tsx'
+import CompletedProgresses from '../components/CompletedProgresses.tsx'
 
 interface Props {
   className?: string
@@ -13,28 +14,9 @@ interface Props {
 }
 
 function DownloadingPane({ className, config, setConfig }: Props) {
-  const { notification } = AntdApp.useApp()
   const [progresses, setProgresses] = useState<Map<number, ProgressData>>(new Map())
   const [downloadSpeed, setDownloadSpeed] = useState<string>()
   const [settingsDialogShowing, setSettingsDialogShowing] = useState<boolean>(false)
-  const sortedProgresses = useMemo(
-    () =>
-      Array.from(progresses.entries()).sort((a, b) => {
-        return b[1].totalImgCount - a[1].totalImgCount
-      }),
-    [progresses],
-  )
-
-  const notificationRef = useRef(notification)
-  const progressesRef = useRef(progresses)
-
-  useEffect(() => {
-    notificationRef.current = notification
-  }, [notification])
-
-  useEffect(() => {
-    progressesRef.current = progresses
-  }, [progresses])
 
   useEffect(() => {
     let mounted = true
@@ -76,17 +58,20 @@ function DownloadingPane({ className, config, setConfig }: Props) {
 
           let indicator = ''
           if (state === 'Pending') {
-            indicator = `等待中 ${downloadedImgCount}/${totalImgCount}`
+            indicator = `排队中`
           } else if (state === 'Downloading') {
-            indicator = `下载中 ${downloadedImgCount}/${totalImgCount}`
+            indicator = `下载中`
           } else if (state === 'Paused') {
-            indicator = `已暂停 ${downloadedImgCount}/${totalImgCount}`
+            indicator = `已暂停`
           } else if (state === 'Cancelled') {
-            indicator = `已取消 ${downloadedImgCount}/${totalImgCount}`
+            indicator = `已取消`
           } else if (state === 'Completed') {
-            indicator = `下载完成 ${downloadedImgCount}/${totalImgCount}`
+            indicator = `下载完成`
           } else if (state === 'Failed') {
-            indicator = `下载失败 ${downloadedImgCount}/${totalImgCount}`
+            indicator = `下载失败`
+          }
+          if (totalImgCount !== 0) {
+            indicator += ` ${downloadedImgCount}/${totalImgCount}`
           }
 
           const next = new Map(prev)
@@ -130,21 +115,17 @@ function DownloadingPane({ className, config, setConfig }: Props) {
     }
   }
 
-  function stateToStatus(state: DownloadTaskState): 'normal' | 'exception' | 'active' | 'success' {
-    if (state === 'Downloading') {
-      return 'active'
-    } else if (state === 'Completed') {
-      return 'success'
-    } else if (state === 'Failed') {
-      return 'exception'
-    } else {
-      return 'normal'
-    }
-  }
+  const tabItems = useMemo<TabsProps['items']>(
+    () => [
+      { key: 'uncompleted', label: '未完成', children: <UncompletedProgresses progresses={progresses} /> },
+      { key: 'completed', label: '已完成', children: <CompletedProgresses progresses={progresses} /> },
+    ],
+    [progresses],
+  )
 
   return (
     <div className={`h-full flex flex-col ${className}`}>
-      <span className="h-38px text-lg font-bold">下载列表</span>
+      <span className="h-11 text-lg font-bold">下载列表</span>
       <div className="flex gap-col-1">
         <Input value={config.downloadDir} prefix="下载目录" size="small" readOnly onClick={selectDownloadDir} />
         <Button size="small" onClick={showDownloadDirInFileManager}>
@@ -161,19 +142,7 @@ function DownloadingPane({ className, config, setConfig }: Props) {
         />
       </div>
       <span>下载速度: {downloadSpeed}</span>
-      <div className="overflow-auto">
-        {sortedProgresses.map(([chapterId, { state, chapterInfo, percentage, indicator }]) => (
-          <div className="grid grid-cols-[1fr_1fr_2fr]" key={chapterId}>
-            <span className="mb-1! text-ellipsis whitespace-nowrap overflow-hidden" title={chapterInfo.comicTitle}>
-              {chapterInfo.comicTitle}
-            </span>
-            <span className="mb-1! text-ellipsis whitespace-nowrap overflow-hidden" title={chapterInfo.chapterTitle}>
-              {chapterInfo.chapterTitle}
-            </span>
-            <Progress status={stateToStatus(state)} percent={percentage} format={() => indicator} />
-          </div>
-        ))}
-      </div>
+      <Tabs size="small" className="overflow-auto h-full" items={tabItems} />
     </div>
   )
 }
