@@ -157,11 +157,7 @@ impl DownloadTask {
             let state_is_pending = *state_receiver.borrow() == DownloadTaskState::Pending;
             tokio::select! {
                 () = &mut download_chapter_task, if state_is_downloading && permit.is_some() => break,
-                // FIXME: 当状态从`Downloading`切换到`Padding`时，permit不会被释放(不为None)
-                // 又因为下面这个分支需要permit为None，在这种情况下acquire_chapter_permit就一直不会被调用
-                // 不调用acquire_chapter_permit就无法将状态切换为`Downloading`，导致下载任务无法继续
-                // 应该去掉permit.is_none()条件
-                control_flow = self.acquire_chapter_permit(&mut permit), if state_is_pending && permit.is_none() => {
+                control_flow = self.acquire_chapter_permit(&mut permit), if state_is_pending => {
                     match control_flow {
                         ControlFlow::Continue(()) => continue,
                         ControlFlow::Break(()) => break,
