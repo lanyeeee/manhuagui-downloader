@@ -301,6 +301,10 @@ impl DownloadTask {
                 }
             },
         };
+        // 如果当前任务状态不是`Pending`，则不将任务状态设置为`Downloading`
+        if *self.state_sender.borrow() != DownloadTaskState::Pending {
+            return ControlFlow::Continue(());
+        }
         // 将任务状态设置为`Downloading`
         if let Err(err) = self
             .state_sender
