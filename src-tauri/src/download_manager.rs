@@ -62,10 +62,19 @@ impl DownloadManager {
     }
 
     pub fn create_download_task(&self, chapter_info: ChapterInfo) {
+        use DownloadTaskState::{Downloading, Paused, Pending};
+        let chapter_id = chapter_info.chapter_id;
+        let mut tasks = self.download_tasks.write();
+        if let Some(task) = tasks.get(&chapter_id) {
+            // 如果任务已经存在，且状态是`Pending`、`Downloading`或`Paused`，则不创建新任务
+            let state = *task.state_sender.borrow();
+            if matches!(state, Pending | Downloading | Paused) {
+                return;
+            }
+        }
         let task = DownloadTask::new(self.app.clone(), chapter_info);
-        let chapter_id = task.chapter_info.chapter_id;
         tauri::async_runtime::spawn(task.clone().process());
-        self.download_tasks.write().insert(chapter_id, task);
+        tasks.insert(chapter_id, task);
     }
 
     pub fn pause_download_task(&self, chapter_id: i64) -> anyhow::Result<()> {
