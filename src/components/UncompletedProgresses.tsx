@@ -96,7 +96,7 @@ function Progresses({ progresses, selectedIds, setSelectedIds }: ProgressesProps
       if (result.status === 'error') {
         console.error(result.error)
       }
-    } else if (state === 'Paused') {
+    } else {
       const result = await commands.resumeDownloadTask(chapterId)
       if (result.status === 'error') {
         console.error(result.error)

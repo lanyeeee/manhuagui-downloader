@@ -87,11 +87,26 @@ impl DownloadManager {
     }
 
     pub fn resume_download_task(&self, chapter_id: i64) -> anyhow::Result<()> {
-        let tasks = self.download_tasks.read();
-        let Some(task) = tasks.get(&chapter_id) else {
-            return Err(anyhow!("未找到章节ID为`{chapter_id}`的下载任务"));
+        use DownloadTaskState::{Cancelled, Completed, Failed, Pending};
+        let chapter_info = {
+            let tasks = self.download_tasks.read();
+            let Some(task) = tasks.get(&chapter_id) else {
+                return Err(anyhow!("未找到章节ID为`{chapter_id}`的下载任务"));
+            };
+
+            let state = *task.state_sender.borrow();
+            if matches!(state, Failed | Cancelled | Completed) {
+                // 如果任务状态是`Failed`、`Cancelled`或`Completed`，则获取 chapter_info 后重新创建任务
+                Some(task.chapter_info.as_ref().clone())
+            } else {
+                task.set_state(Pending);
+                None
+            }
         };
-        task.set_state(DownloadTaskState::Pending);
+        // 如果 chapter_info 不为 None，则重新创建任务
+        if let Some(chapter_info) = chapter_info {
+            self.create_download_task(chapter_info);
+        }
         Ok(())
     }
 
