@@ -17,13 +17,16 @@ function CompletedProgresses({ progresses }: Props) {
   )
 
   return (
-    <div className="h-full">
+    <div className="h-full flex flex-col gap-row-2 px-1">
       {completedProgresses.map(([chapterId, { chapterInfo }]) => (
-        <div className="grid grid-cols-[1fr_1fr]" key={chapterId}>
-          <span className="mb-1! text-ellipsis whitespace-nowrap overflow-hidden" title={chapterInfo.comicTitle}>
+        <div className="grid grid-cols-[1fr_1fr_1fr] py-2 px-4 bg-gray-100 rounded-lg" key={chapterId}>
+          <span className="text-ellipsis whitespace-nowrap overflow-hidden" title={chapterInfo.comicTitle}>
             {chapterInfo.comicTitle}
           </span>
-          <span className="mb-1! text-ellipsis whitespace-nowrap overflow-hidden" title={chapterInfo.chapterTitle}>
+          <span className="text-ellipsis whitespace-nowrap overflow-hidden" title={chapterInfo.groupName}>
+            {chapterInfo.groupName}
+          </span>
+          <span className="text-ellipsis whitespace-nowrap overflow-hidden" title={chapterInfo.chapterTitle}>
             {chapterInfo.chapterTitle}
           </span>
         </div>
