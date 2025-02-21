@@ -1,6 +1,14 @@
 import { ProgressData } from '../types.ts'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { CheckOutlined, DeleteOutlined, PauseOutlined, RightOutlined } from '@ant-design/icons'
+import {
+  CheckOutlined,
+  ClockCircleOutlined,
+  DeleteOutlined,
+  ExclamationCircleOutlined,
+  LoadingOutlined,
+  PauseOutlined,
+  RightOutlined,
+} from '@ant-design/icons'
 import { commands, DownloadTaskState } from '../bindings.ts'
 import SelectionArea, { SelectionEvent, useSelection } from '@viselect/react'
 import { Dropdown, MenuProps, Progress } from 'antd'
@@ -43,12 +51,12 @@ function UncompletedProgresses({ progresses }: Props) {
 
   return (
     <SelectionArea
-      className="h-full container selection-container"
+      className="h-full container selection-container flex flex-col"
       selectables=".selectable"
       features={{ deselectOnBlur: true }}
       onMove={updateSelectedIds}
       onStart={unselectAll}>
-      <span className="ml-auto select-none">左键拖动进行框选，右键打开菜单，双击暂停/继续</span>
+      <span className="mr-auto select-none">左键拖动进行框选，右键打开菜单，双击暂停/继续</span>
       <Progresses progresses={progresses} selectedIds={selectedIds} setSelectedIds={setSelectedIds} />
     </SelectionArea>
   )
@@ -166,21 +174,15 @@ function Progresses({ progresses, selectedIds, setSelectedIds }: ProgressesProps
   return (
     <Dropdown className="select-none" menu={{ items: dropdownOptions }} trigger={['contextMenu']}>
       <div className="h-full select-none">
-        {uncompletedProgresses.map(([chapterId, { state, chapterInfo, percentage, indicator }], index) => (
+        {uncompletedProgresses.map(([chapterId, progressData], index) => (
           <div
             ref={(el) => (selectableRefs.current[index] = el)}
-            className={`grid grid-cols-[1fr_1fr_2fr] selectable ${selectedIds.has(chapterId) ? 'selected' : 'hover:bg-black/10'}`}
+            className={`selectable p-3 mb-2 rounded-lg ${selectedIds.has(chapterId) ? 'selected shadow-md' : 'hover:bg-gray-1'}`}
             key={chapterId}
             data-key={chapterId}
-            onDoubleClick={() => onProgressDoubleClick(state, chapterId)}
+            onDoubleClick={() => onProgressDoubleClick(progressData.state, chapterId)}
             onContextMenu={() => onProgressContextMenu(chapterId)}>
-            <span className="mb-1! text-ellipsis whitespace-nowrap overflow-hidden" title={chapterInfo.comicTitle}>
-              {chapterInfo.comicTitle}
-            </span>
-            <span className="mb-1! text-ellipsis whitespace-nowrap overflow-hidden" title={chapterInfo.chapterTitle}>
-              {chapterInfo.chapterTitle}
-            </span>
-            <DownloadingProgresses state={state} percentage={percentage} indicator={indicator} />
+            <DownloadingProgresses progressData={progressData} />
           </div>
         ))}
       </div>
@@ -188,13 +190,7 @@ function Progresses({ progresses, selectedIds, setSelectedIds }: ProgressesProps
   )
 }
 
-interface DownloadingProgressesProps {
-  state: DownloadTaskState
-  percentage: number
-  indicator: string
-}
-
-function DownloadingProgresses({ state, percentage, indicator }: DownloadingProgressesProps) {
+function DownloadingProgresses({ progressData }: { progressData: ProgressData }) {
   function stateToStatus(state: DownloadTaskState): 'normal' | 'exception' | 'active' | 'success' {
     if (state === 'Downloading') {
       return 'active'
@@ -207,11 +203,77 @@ function DownloadingProgresses({ state, percentage, indicator }: DownloadingProg
     }
   }
 
-  if (isNaN(percentage)) {
-    return <span>{indicator}</span>
+  function stateToColorClass(state: DownloadTaskState) {
+    if (state === 'Downloading') {
+      return 'text-blue-500'
+    } else if (state === 'Pending') {
+      return 'text-gray-500'
+    } else if (state === 'Paused') {
+      return 'text-yellow-500'
+    } else if (state === 'Failed') {
+      return 'text-red-500'
+    } else if (state === 'Completed') {
+      return 'text-green-500'
+    } else if (state === 'Cancelled') {
+      return 'text-stone-500'
+    }
+
+    return ''
   }
 
-  return <Progress status={stateToStatus(state)} percent={percentage} format={() => indicator} />
+  function stateToColorHex(state: DownloadTaskState) {
+    if (state === 'Downloading') {
+      return '#2B7FFF'
+    } else if (state === 'Pending') {
+      return '#6A7282'
+    } else if (state === 'Paused') {
+      return '#F0B100'
+    } else if (state === 'Failed') {
+      return '#FB2C36'
+    } else if (state === 'Completed') {
+      return '#00C950'
+    } else if (state === 'Cancelled') {
+      return '#79716B'
+    }
+
+    return ''
+  }
+
+  const started = !isNaN(progressData.percentage)
+  const color = stateToColorHex(progressData.state)
+  const colorClass = stateToColorClass(progressData.state)
+
+  return (
+    <>
+      <div className="grid grid-cols-[1fr_1fr_1fr]">
+        <div className="text-ellipsis whitespace-nowrap overflow-hidden" title={progressData.chapterInfo.comicTitle}>
+          {progressData.chapterInfo.comicTitle}
+        </div>
+        <div className="text-ellipsis whitespace-nowrap overflow-hidden" title={progressData.chapterInfo.groupName}>
+          {progressData.chapterInfo.groupName}
+        </div>
+        <div className="text-ellipsis whitespace-nowrap overflow-hidden" title={progressData.chapterInfo.chapterTitle}>
+          {progressData.chapterInfo.chapterTitle}
+        </div>
+      </div>
+      <div className={`flex ${colorClass}`}>
+        {progressData.state === 'Downloading' && <LoadingOutlined />}
+        {progressData.state === 'Pending' && <ClockCircleOutlined />}
+        {progressData.state === 'Paused' && <PauseOutlined />}
+        {progressData.state === 'Failed' && <ExclamationCircleOutlined />}
+        {!started && <div className="ml-auto">{progressData.indicator}</div>}
+        {started && (
+          <Progress
+            className="ml-2"
+            strokeColor={color}
+            status={stateToStatus(progressData.state)}
+            percent={progressData.percentage}
+            format={() => <div className={colorClass}>{progressData.indicator}</div>}
+          />
+        )}
+      </div>
+    </>
+  )
 }
 
 export default UncompletedProgresses
