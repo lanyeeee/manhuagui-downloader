@@ -4,36 +4,19 @@ use serde::{Deserialize, Serialize};
 use specta::Type;
 use tauri_specta::Event;
 
-use crate::types::LogLevel;
+use crate::{
+    download_manager::DownloadTaskState,
+    types::{ChapterInfo, LogLevel},
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type, Event)]
 #[serde(tag = "event", content = "data")]
 pub enum DownloadEvent {
     #[serde(rename_all = "camelCase")]
-    ChapterPending {
-        chapter_id: i64,
-        comic_title: String,
-        chapter_title: String,
-    },
-
-    #[serde(rename_all = "camelCase")]
-    ChapterStart { chapter_id: i64, total: u32 },
-
-    #[serde(rename_all = "camelCase")]
-    ChapterSleeping { chapter_id: i64, remaining_sec: u64 },
-
-    #[serde(rename_all = "camelCase")]
-    ChapterEnd { chapter_id: i64 },
-
-    #[serde(rename_all = "camelCase")]
-    ImageSuccess {
-        chapter_id: i64,
-        url: String,
-        current: u32,
-    },
-
-    #[serde(rename_all = "camelCase")]
     Speed { speed: String },
+
+    #[serde(rename_all = "camelCase")]
+    Sleeping { chapter_id: i64, remaining_sec: u64 },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type, Event)]
@@ -106,4 +89,13 @@ pub struct LogEvent {
     pub filename: String,
     #[serde(rename = "line_number")]
     pub line_number: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type, Event)]
+#[serde(rename_all = "camelCase")]
+pub struct DownloadTaskEvent {
+    pub state: DownloadTaskState,
+    pub chapter_info: ChapterInfo,
+    pub downloaded_img_count: u32,
+    pub total_img_count: u32,
 }
