@@ -75,11 +75,7 @@ function ChapterPane({ pickedComic, setPickedComic }: Props) {
     if (chapterToDownload === undefined) {
       return
     }
-    const result = await commands.downloadChapters(chapterToDownload)
-    if (result.status === 'error') {
-      console.error(result.error)
-      return
-    }
+    await commands.downloadChapters(chapterToDownload)
     // 把已下载的章节从已勾选的章节id中移除
     setCheckedIds((prev) => new Set([...prev].filter((id) => !chapterToDownload.map((c) => c.chapterId).includes(id))))
     // 更新pickedComic，将已下载的章节标记为已下载
