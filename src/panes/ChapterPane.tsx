@@ -14,6 +14,7 @@ import {
 import { ChapterInfo, Comic, commands } from '../bindings.ts'
 import { useEffect, useMemo, useState } from 'react'
 import SelectionArea, { SelectionEvent } from '@viselect/react'
+import styles from '../styles/ChapterPane.module.css'
 
 interface Props {
   pickedComic: Comic | undefined
@@ -288,7 +289,7 @@ function ChapterTabs({
         <Dropdown menu={{ items: dropdownOptions }} trigger={['contextMenu']}>
           <div className="h-full flex flex-col gap-row-1 overflow-auto">
             <SelectionArea
-              className="container selection-container h-full"
+              className={`${styles.selectionContainer} h-full`}
               selectables=".selectable"
               features={{ deselectOnBlur: true }}
               onMove={updateSelectedIds}
@@ -300,7 +301,7 @@ function ChapterTabs({
                     key={chapter.chapterId}
                     data-key={chapter.chapterId}>
                     <Checkbox
-                      value={chapter.chapterId}
+                      className={styles.antdCheckBox}
                       checked={checkedIds.has(chapter.chapterId)}
                       disabled={chapter.isDownloaded === true}
                       onChange={onCheckboxChange}>
@@ -324,7 +325,7 @@ function ChapterTabs({
     <Tabs
       key={pickedComic.id}
       activeKey={currentGroupName}
-      className="flex-1 overflow-auto select-none"
+      className="flex-1 overflow-auto"
       size="small"
       items={items}
       onChange={setCurrentGroupName}

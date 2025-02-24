@@ -12,6 +12,7 @@ import {
 import { commands, DownloadTaskState } from '../bindings.ts'
 import SelectionArea, { SelectionEvent, useSelection } from '@viselect/react'
 import { Dropdown, MenuProps, Progress } from 'antd'
+import styles from '../styles/UncompletedProgresses.module.css'
 
 interface Props {
   progresses: Map<number, ProgressData>
@@ -51,7 +52,7 @@ function UncompletedProgresses({ progresses }: Props) {
 
   return (
     <SelectionArea
-      className="h-full container selection-container flex flex-col"
+      className={`${styles.selectionContainer} h-full flex flex-col`}
       selectables=".selectable"
       features={{ deselectOnBlur: true }}
       onMove={updateSelectedIds}
