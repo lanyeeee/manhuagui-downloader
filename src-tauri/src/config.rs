@@ -11,6 +11,7 @@ pub struct Config {
     pub download_dir: PathBuf,
     pub export_dir: PathBuf,
     pub download_interval_sec: u64,
+    pub enable_file_logger: bool,
 }
 
 impl Config {
@@ -70,6 +71,7 @@ impl Config {
             download_dir: app_data_dir.join("漫画下载"),
             export_dir: app_data_dir.join("漫画导出"),
             download_interval_sec: 10,
+            enable_file_logger: true,
         }
     }
 }
