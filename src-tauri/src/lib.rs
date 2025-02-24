@@ -14,7 +14,7 @@ mod utils;
 use config::Config;
 use download_manager::DownloadManager;
 use events::{
-    DownloadEvent, ExportCbzEvent, ExportPdfEvent, LogEvent, DownloadTaskEvent,
+    DownloadEvent, DownloadTaskEvent, ExportCbzEvent, ExportPdfEvent, LogEvent,
     UpdateDownloadedComicsEvent,
 };
 use manhuagui_client::ManhuaguiClient;
@@ -78,8 +78,6 @@ pub fn run() {
         .setup(move |app| {
             builder.mount_events(app);
 
-            logger::init(app.handle())?;
-
             let config = RwLock::new(Config::new(app.handle())?);
             app.manage(config);
 
@@ -88,6 +86,8 @@ pub fn run() {
 
             let download_manager = DownloadManager::new(app.handle());
             app.manage(download_manager);
+
+            logger::init(app.handle())?;
 
             Ok(())
         })

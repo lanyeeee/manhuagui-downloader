@@ -2,6 +2,7 @@ use std::{io::Write, sync::OnceLock};
 
 use anyhow::Context;
 use notify::{RecommendedWatcher, Watcher};
+use parking_lot::RwLock;
 use tauri::{AppHandle, Manager};
 use tauri_specta::Event;
 use tracing::{Level, Subscriber};
@@ -18,7 +19,7 @@ use tracing_subscriber::{
     Layer, Registry,
 };
 
-use crate::{events::LogEvent, extensions::AnyhowErrorToStringChain};
+use crate::{config::Config, events::LogEvent, extensions::AnyhowErrorToStringChain};
 
 struct LogEventWriter {
     app: AppHandle,
@@ -46,7 +47,7 @@ impl Write for LogEventWriter {
 }
 
 static RELOAD_FN: OnceLock<Box<dyn Fn() -> anyhow::Result<()> + Send + Sync>> = OnceLock::new();
-static GUARD: OnceLock<parking_lot::Mutex<WorkerGuard>> = OnceLock::new();
+static GUARD: OnceLock<parking_lot::Mutex<Option<WorkerGuard>>> = OnceLock::new();
 
 pub fn init(app: &AppHandle) -> anyhow::Result<()> {
     let app_data_dir = app
@@ -111,10 +112,30 @@ pub fn reload_file_logger() -> anyhow::Result<()> {
     RELOAD_FN.get().context("RELOAD_FN未初始化")?()
 }
 
-fn create_file_layer<S>(app: &AppHandle) -> anyhow::Result<(impl Layer<S>, WorkerGuard)>
+pub fn disable_file_logger() -> anyhow::Result<()> {
+    if let Some(guard) = GUARD.get().context("GUARD未初始化")?.lock().take() {
+        drop(guard);
+    };
+    Ok(())
+}
+
+fn create_file_layer<S>(
+    app: &AppHandle,
+) -> anyhow::Result<(Box<dyn Layer<S> + Send + Sync>, Option<WorkerGuard>)>
 where
     S: Subscriber + for<'a> LookupSpan<'a>,
 {
+    let enable_file_logger = app.state::<RwLock<Config>>().read().enable_file_logger;
+    // 如果不启用文件日志，则返回一个占位用的sink layer，不创建也不输出日志文件
+    if !enable_file_logger {
+        let sink_layer = layer()
+            .with_writer(std::io::sink)
+            .with_timer(LocalTime::rfc_3339())
+            .with_ansi(false)
+            .with_file(true)
+            .with_line_number(true);
+        return Ok((Box::new(sink_layer), None));
+    }
     let logs_dir = logs_dir(app).context("获取日志目录失败")?;
     let file_appender = RollingFileAppender::builder()
         .filename_prefix("manhuagui-downloader")
@@ -129,7 +150,7 @@ where
         .with_ansi(false)
         .with_file(true)
         .with_line_number(true);
-    Ok((file_layer, guard))
+    Ok((Box::new(file_layer), Some(guard)))
 }
 
 async fn file_log_watcher(app: AppHandle) {

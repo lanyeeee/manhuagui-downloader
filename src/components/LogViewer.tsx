@@ -1,17 +1,19 @@
-import { App as AntdApp, Modal, Input, Button, Select } from 'antd'
+import { App as AntdApp, Modal, Input, Button, Select, Checkbox } from 'antd'
 import { useEffect, useState, useMemo, useRef } from 'react'
-import { commands, events, LogEvent, LogLevel } from '../bindings.ts'
+import { commands, Config, events, LogEvent, LogLevel } from '../bindings.ts'
 import { path } from '@tauri-apps/api'
 import { appDataDir } from '@tauri-apps/api/path'
 
 interface Props {
   logViewerShowing: boolean
   setLogViewerShowing: (showing: boolean) => void
+  config: Config
+  setConfig: (value: Config | undefined | ((prev: Config | undefined) => Config | undefined)) => void
 }
 
 type LogRecord = LogEvent & { id: number; formatedLog: string }
 
-function LogViewer({ logViewerShowing, setLogViewerShowing }: Props) {
+function LogViewer({ logViewerShowing, setLogViewerShowing, config, setConfig }: Props) {
   const { notification } = AntdApp.useApp()
   const [logRecords, setLogRecords] = useState<LogRecord[]>([])
   const [searchText, setSearchText] = useState('')
@@ -160,18 +162,37 @@ function LogViewer({ logViewerShowing, setLogViewerShowing }: Props) {
       footer={null}>
       <div className="mb-2 flex flex-wrap gap-2">
         <Input
+          size="small"
           placeholder="搜索日志..."
           value={searchText}
           onChange={(e) => setSearchText(e.target.value)}
           style={{ width: 300 }}
           allowClear
         />
-        <Select value={selectedLevel} onChange={setSelectedLevel} options={logLevelOptions} style={{ width: 120 }} />
+        <Select
+          size="small"
+          value={selectedLevel}
+          onChange={setSelectedLevel}
+          options={logLevelOptions}
+          style={{ width: 120 }}
+        />
         <div className="flex flex-wrap gap-2 ml-auto">
-          <Button onClick={showLogsDirInFileManager}>打开日志目录</Button>
-          <Button onClick={clearLogRecords} danger>
-            清空日志浏览器
+          <Button size="small" onClick={showLogsDirInFileManager}>
+            打开日志目录
           </Button>
+          <Checkbox
+            className="select-none w-auto"
+            checked={config.enableFileLogger}
+            onChange={() =>
+              setConfig((prev) => {
+                if (prev === undefined) {
+                  return prev
+                }
+                return { ...prev, enableFileLogger: !prev.enableFileLogger }
+              })
+            }>
+            输出文件日志
+          </Checkbox>
         </div>
       </div>
 
@@ -181,6 +202,11 @@ function LogViewer({ logViewerShowing, setLogViewerShowing }: Props) {
             {formatedLog}
           </div>
         ))}
+      </div>
+      <div className="pt-1 flex">
+        <Button className="ml-auto" size="small" onClick={clearLogRecords} danger>
+          清空日志浏览器
+        </Button>
       </div>
     </Modal>
   )
