@@ -181,7 +181,7 @@ function LogViewer({ logViewerShowing, setLogViewerShowing, config, setConfig }:
             打开日志目录
           </Button>
           <Checkbox
-            className="select-none w-auto"
+            className="select-none"
             checked={config.enableFileLogger}
             onChange={() =>
               setConfig((prev) => {
