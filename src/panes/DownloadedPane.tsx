@@ -9,7 +9,7 @@ import { open } from '@tauri-apps/plugin-dialog'
 interface ProgressData {
   comicTitle: string
   current: number
-  total: number
+  totalImgCount: number
 }
 
 interface Props {
@@ -64,7 +64,7 @@ function DownloadedPane({ config, setConfig, setPickedComic, currentTabName, set
       .listen(async ({ payload: exportCbzEvent }) => {
         if (exportCbzEvent.event === 'Start') {
           const { uuid, comicTitle, total } = exportCbzEvent.data
-          progresses.current.set(uuid, { comicTitle, current: 0, total })
+          progresses.current.set(uuid, { comicTitle, current: 0, totalImgCount: total })
           messageRef.current.loading({ key: uuid, content: `${comicTitle} 正在导出cbz(0/${total})`, duration: 0 })
         } else if (exportCbzEvent.event === 'Progress') {
           const { uuid, current } = exportCbzEvent.data
@@ -75,7 +75,7 @@ function DownloadedPane({ config, setConfig, setPickedComic, currentTabName, set
           progresses.current.set(uuid, { ...progressData, current })
           messageRef.current.loading({
             key: uuid,
-            content: `${progressData.comicTitle} 正在导出cbz(${current}/${progressData.total})`,
+            content: `${progressData.comicTitle} 正在导出cbz(${current}/${progressData.totalImgCount})`,
             duration: 0,
           })
         } else if (exportCbzEvent.event === 'End') {
@@ -86,7 +86,7 @@ function DownloadedPane({ config, setConfig, setPickedComic, currentTabName, set
           }
           messageRef.current.success({
             key: uuid,
-            content: `${progressData.comicTitle} 导出cbz完成(${progressData.total}/${progressData.total})`,
+            content: `${progressData.comicTitle} 导出cbz完成(${progressData.totalImgCount}/${progressData.totalImgCount})`,
           })
           progresses.current.delete(uuid)
         }
@@ -103,7 +103,7 @@ function DownloadedPane({ config, setConfig, setPickedComic, currentTabName, set
       .listen(async ({ payload: exportPdfEvent }) => {
         if (exportPdfEvent.event === 'CreateStart') {
           const { uuid, comicTitle, total } = exportPdfEvent.data
-          progresses.current.set(uuid, { comicTitle, current: 0, total })
+          progresses.current.set(uuid, { comicTitle, current: 0, totalImgCount: total })
           messageRef.current.loading({ key: uuid, content: `${comicTitle} 正在导出pdf(0/${total})`, duration: 0 })
         } else if (exportPdfEvent.event === 'CreateProgress') {
           const { uuid, current } = exportPdfEvent.data
@@ -114,7 +114,7 @@ function DownloadedPane({ config, setConfig, setPickedComic, currentTabName, set
           progresses.current.set(uuid, { ...progressData, current })
           messageRef.current.loading({
             key: uuid,
-            content: `${progressData.comicTitle} 正在导出pdf(${current}/${progressData.total})`,
+            content: `${progressData.comicTitle} 正在导出pdf(${current}/${progressData.totalImgCount})`,
             duration: 0,
           })
         } else if (exportPdfEvent.event === 'CreateEnd') {
@@ -125,12 +125,12 @@ function DownloadedPane({ config, setConfig, setPickedComic, currentTabName, set
           }
           messageRef.current.success({
             key: uuid,
-            content: `${progressData.comicTitle} 导出pdf完成(${progressData.total}/${progressData.total})`,
+            content: `${progressData.comicTitle} 导出pdf完成(${progressData.totalImgCount}/${progressData.totalImgCount})`,
           })
           progresses.current.delete(uuid)
         } else if (exportPdfEvent.event === 'MergeStart') {
           const { uuid, comicTitle, total } = exportPdfEvent.data
-          progresses.current.set(uuid, { comicTitle, current: 0, total })
+          progresses.current.set(uuid, { comicTitle, current: 0, totalImgCount: total })
           messageRef.current.loading({ key: uuid, content: `${comicTitle} 正在合并pdf(0/${total})`, duration: 0 })
         } else if (exportPdfEvent.event === 'MergeProgress') {
           const { uuid, current } = exportPdfEvent.data
@@ -141,7 +141,7 @@ function DownloadedPane({ config, setConfig, setPickedComic, currentTabName, set
           progresses.current.set(uuid, { ...progressData, current })
           messageRef.current.loading({
             key: uuid,
-            content: `${progressData.comicTitle} 正在合并pdf(${current}/${progressData.total})`,
+            content: `${progressData.comicTitle} 正在合并pdf(${current}/${progressData.totalImgCount})`,
             duration: 0,
           })
         } else if (exportPdfEvent.event === 'MergeEnd') {
@@ -152,7 +152,7 @@ function DownloadedPane({ config, setConfig, setPickedComic, currentTabName, set
           }
           messageRef.current.success({
             key: uuid,
-            content: `${progressData.comicTitle} 合并pdf完成(${progressData.total}/${progressData.total})`,
+            content: `${progressData.comicTitle} 合并pdf完成(${progressData.totalImgCount}/${progressData.totalImgCount})`,
           })
           progresses.current.delete(uuid)
         }

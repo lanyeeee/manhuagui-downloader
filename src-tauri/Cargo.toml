@@ -50,6 +50,7 @@ image = { version = "0.25.2", default-features = false, features = ["jpeg"] }
 tracing = { version = "0.1.41" }
 tracing-subscriber = { version = "0.3.19", features = ["json", "time", "local-time"] }
 tracing-appender = { version = "0.2.3" }
+notify = { version = "8.0.0" }
 
 [profile.release]
 strip = true

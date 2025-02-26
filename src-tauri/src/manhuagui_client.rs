@@ -120,7 +120,7 @@ impl ManhuaguiClient {
         Ok(comic)
     }
 
-    pub async fn get_image_urls(&self, chapter_info: &ChapterInfo) -> anyhow::Result<Vec<String>> {
+    pub async fn get_img_urls(&self, chapter_info: &ChapterInfo) -> anyhow::Result<Vec<String>> {
         let comic_id = chapter_info.comic_id;
         let chapter_id = chapter_info.chapter_id;
 
@@ -144,7 +144,7 @@ impl ManhuaguiClient {
         Ok(urls)
     }
 
-    pub async fn get_image_bytes(&self, url: &str) -> anyhow::Result<Bytes> {
+    pub async fn get_img_bytes(&self, url: &str) -> anyhow::Result<Bytes> {
         // 发送下载图片请求
         let http_resp = self
             .img_client

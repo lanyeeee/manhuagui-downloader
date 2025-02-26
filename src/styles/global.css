@@ -24,26 +24,6 @@ body {
     @apply select-none;
 }
 
-.ant-checkbox-wrapper > span:nth-child(2) {
-    @apply overflow-hidden whitespace-nowrap text-ellipsis pr-0;
-}
-
-.ant-checkbox-wrapper {
-    @apply w-full;
-}
-
 .selection-area {
     @apply bg-[rgba(46,115,252,0.5)];
-}
-
-.selection-container {
-    @apply user-select-none overflow-auto;
-}
-
-.selection-container .selected {
-    @apply bg-[rgb(204,232,255)];
-}
-
-.selection-container .downloaded {
-    @apply bg-[rgba(24,160,88,0.16)];
 }

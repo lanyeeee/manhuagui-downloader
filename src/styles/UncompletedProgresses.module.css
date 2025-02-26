@@ -1,0 +1,11 @@
+.selectionContainer {
+    @apply select-none overflow-auto;
+
+    :global(.selected) {
+        @apply bg-[rgb(204,232,255)];
+    }
+
+    :global(.downloaded) {
+        @apply bg-[rgba(24,160,88,0.16)];
+    }
+}
