@@ -9,6 +9,7 @@ import ChapterPane from './panes/ChapterPane.tsx'
 import FavoritePane from './panes/FavoritePane.tsx'
 import DownloadedPane from './panes/DownloadedPane.tsx'
 import LogViewer from './components/LogViewer.tsx'
+import { AboutDialog } from './components/AboutDialog.tsx'
 
 interface Props {
   config: Config
@@ -21,6 +22,7 @@ function AppContent({ config, setConfig }: Props) {
   const [userProfile, setUserProfile] = useState<UserProfile>()
   const [loginDialogShowing, setLoginDialogShowing] = useState<boolean>(false)
   const [logViewerShowing, setLogViewerShowing] = useState<boolean>(false)
+  const [aboutDialogShowing, setAboutDialogShowing] = useState<boolean>(false)
   const [pickedComic, setPickedComic] = useState<Comic>()
 
   useEffect(() => {
@@ -49,11 +51,6 @@ function AppContent({ config, setConfig }: Props) {
       message.success('获取用户信息成功')
     })
   }, [config.cookie, message])
-
-  async function test() {
-    const result = await commands.getLogsDirSize()
-    console.log(result)
-  }
 
   const [currentTabName, setCurrentTabName] = useState<CurrentTabName>('search')
 
@@ -103,7 +100,7 @@ function AppContent({ config, setConfig }: Props) {
           账号登录
         </Button>
         <Button onClick={() => setLogViewerShowing(true)}>查看日志</Button>
-        <Button onClick={test}>测试用</Button>
+        <Button onClick={() => setAboutDialogShowing(true)}>关于</Button>
         {userProfile !== undefined && (
           <div className="flex items-center">
             <Avatar src={userProfile.avatar} />
@@ -134,6 +131,8 @@ function AppContent({ config, setConfig }: Props) {
         config={config}
         setConfig={setConfig}
       />
+
+      <AboutDialog aboutDialogShowing={aboutDialogShowing} setAboutDialogShowing={setAboutDialogShowing} />
     </div>
   )
 }
