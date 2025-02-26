@@ -128,7 +128,12 @@ function AppContent({ config, setConfig }: Props) {
         config={config}
         setConfig={setConfig}
       />
-      <LogViewer logViewerShowing={logViewerShowing} setLogViewerShowing={setLogViewerShowing} />
+      <LogViewer
+        logViewerShowing={logViewerShowing}
+        setLogViewerShowing={setLogViewerShowing}
+        config={config}
+        setConfig={setConfig}
+      />
     </div>
   )
 }

@@ -1,4 +1,6 @@
 use std::{
+    collections::HashMap,
+    ops::ControlFlow,
     path::{Path, PathBuf},
     sync::{
         atomic::{AtomicU32, AtomicU64, Ordering},
@@ -9,56 +11,111 @@ use std::{
 
 use anyhow::{anyhow, Context};
 use parking_lot::RwLock;
+use serde::{Deserialize, Serialize};
+use specta::Type;
 use tauri::{AppHandle, Manager};
 use tauri_specta::Event;
-use tokio::time::sleep;
 use tokio::{
-    sync::{mpsc, Semaphore},
+    sync::{watch, Semaphore, SemaphorePermit},
     task::JoinSet,
+    time::sleep,
 };
 
 use crate::{
-    config::Config, events::DownloadEvent, extensions::AnyhowErrorToStringChain,
-    manhuagui_client::ManhuaguiClient, types::ChapterInfo,
+    config::Config,
+    events::{DownloadEvent, DownloadTaskEvent},
+    extensions::AnyhowErrorToStringChain,
+    manhuagui_client::ManhuaguiClient,
+    types::ChapterInfo,
 };
 
 /// 用于管理下载任务
 ///
-/// 克隆 `DownloadManager` 的开销极小，性能开销几乎可以忽略不计。
-/// 可以放心地在多个线程中传递和使用它的克隆副本。
+/// 克隆 `DownloadManager` 的开销极小，性能开销几乎可以忽略不计。  
+/// 可以放心地在多个线程中传递和使用它的克隆副本。  
 ///
-/// 具体来说：
-/// - `app` 是 `AppHandle` 类型，根据 `Tauri` 文档，它的克隆开销是极小的。
-/// - 其他字段都被 `Arc` 包裹，这些字段的克隆操作仅仅是增加引用计数。
+/// 具体来说：  
+/// - `app` 是 `AppHandle` 类型，根据 `Tauri` 文档，它的克隆开销是极小的。  
+/// - 其他字段都被 `Arc` 包裹，这些字段的克隆操作仅仅是增加引用计数。  
 #[derive(Clone)]
 pub struct DownloadManager {
     app: AppHandle,
-    sender: Arc<mpsc::Sender<ChapterInfo>>,
     chapter_sem: Arc<Semaphore>,
     img_sem: Arc<Semaphore>,
     byte_per_sec: Arc<AtomicU64>,
+    download_tasks: Arc<RwLock<HashMap<i64, DownloadTask>>>,
 }
 
 impl DownloadManager {
     pub fn new(app: &AppHandle) -> Self {
-        let (sender, receiver) = mpsc::channel::<ChapterInfo>(32);
-
         let manager = DownloadManager {
             app: app.clone(),
-            sender: Arc::new(sender),
             chapter_sem: Arc::new(Semaphore::new(1)),
             img_sem: Arc::new(Semaphore::new(10)),
             byte_per_sec: Arc::new(AtomicU64::new(0)),
+            download_tasks: Arc::new(RwLock::new(HashMap::new())),
         };
 
         tauri::async_runtime::spawn(Self::log_download_speed(app.clone()));
-        tauri::async_runtime::spawn(Self::receiver_loop(app.clone(), receiver));
 
         manager
     }
 
-    pub async fn submit_chapter(&self, chapter_info: ChapterInfo) -> anyhow::Result<()> {
-        self.sender.send(chapter_info).await?;
+    pub fn create_download_task(&self, chapter_info: ChapterInfo) {
+        use DownloadTaskState::{Downloading, Paused, Pending};
+        let chapter_id = chapter_info.chapter_id;
+        let mut tasks = self.download_tasks.write();
+        if let Some(task) = tasks.get(&chapter_id) {
+            // 如果任务已经存在，且状态是`Pending`、`Downloading`或`Paused`，则不创建新任务
+            let state = *task.state_sender.borrow();
+            if matches!(state, Pending | Downloading | Paused) {
+                return;
+            }
+        }
+        let task = DownloadTask::new(self.app.clone(), chapter_info);
+        tauri::async_runtime::spawn(task.clone().process());
+        tasks.insert(chapter_id, task);
+    }
+
+    pub fn pause_download_task(&self, chapter_id: i64) -> anyhow::Result<()> {
+        let tasks = self.download_tasks.read();
+        let Some(task) = tasks.get(&chapter_id) else {
+            return Err(anyhow!("未找到章节ID为`{chapter_id}`的下载任务"));
+        };
+        task.set_state(DownloadTaskState::Paused);
+        Ok(())
+    }
+
+    pub fn resume_download_task(&self, chapter_id: i64) -> anyhow::Result<()> {
+        use DownloadTaskState::{Cancelled, Completed, Failed, Pending};
+        let chapter_info = {
+            let tasks = self.download_tasks.read();
+            let Some(task) = tasks.get(&chapter_id) else {
+                return Err(anyhow!("未找到章节ID为`{chapter_id}`的下载任务"));
+            };
+
+            let state = *task.state_sender.borrow();
+            if matches!(state, Failed | Cancelled | Completed) {
+                // 如果任务状态是`Failed`、`Cancelled`或`Completed`，则获取 chapter_info 后重新创建任务
+                Some(task.chapter_info.as_ref().clone())
+            } else {
+                task.set_state(Pending);
+                None
+            }
+        };
+        // 如果 chapter_info 不为 None，则重新创建任务
+        if let Some(chapter_info) = chapter_info {
+            self.create_download_task(chapter_info);
+        }
+        Ok(())
+    }
+
+    pub fn cancel_download_task(&self, chapter_id: i64) -> anyhow::Result<()> {
+        let tasks = self.download_tasks.read();
+        let Some(task) = tasks.get(&chapter_id) else {
+            return Err(anyhow!("未找到章节ID为`{chapter_id}`的下载任务"));
+        };
+        task.set_state(DownloadTaskState::Cancelled);
         Ok(())
     }
 
@@ -76,104 +133,95 @@ impl DownloadManager {
             let _ = DownloadEvent::Speed { speed }.emit(&app);
         }
     }
+}
 
-    async fn receiver_loop(app: AppHandle, mut receiver: mpsc::Receiver<ChapterInfo>) {
-        while let Some(chapter_info) = receiver.recv().await {
-            let manager = app.state::<DownloadManager>().inner().clone();
-            tauri::async_runtime::spawn(manager.process_chapter(chapter_info));
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub enum DownloadTaskState {
+    Pending,
+    Downloading,
+    Paused,
+    Cancelled,
+    Completed,
+    Failed,
+}
+
+#[derive(Clone)]
+struct DownloadTask {
+    app: AppHandle,
+    download_manager: DownloadManager,
+    chapter_info: Arc<ChapterInfo>,
+    state_sender: watch::Sender<DownloadTaskState>,
+    downloaded_img_count: Arc<AtomicU32>,
+    total_img_count: Arc<AtomicU32>,
+}
+
+impl DownloadTask {
+    pub fn new(app: AppHandle, chapter_info: ChapterInfo) -> Self {
+        let download_manager = app.state::<DownloadManager>().inner().clone();
+        let (state_sender, _) = watch::channel(DownloadTaskState::Pending);
+        Self {
+            app,
+            download_manager,
+            chapter_info: Arc::new(chapter_info),
+            state_sender,
+            downloaded_img_count: Arc::new(AtomicU32::new(0)),
+            total_img_count: Arc::new(AtomicU32::new(0)),
+        }
+    }
+
+    async fn process(self) {
+        let download_chapter_task = self.download_chapter();
+        tokio::pin!(download_chapter_task);
+
+        let mut state_receiver = self.state_sender.subscribe();
+        state_receiver.mark_changed();
+        let mut permit = None;
+        loop {
+            let state_is_downloading = *state_receiver.borrow() == DownloadTaskState::Downloading;
+            let state_is_pending = *state_receiver.borrow() == DownloadTaskState::Pending;
+            tokio::select! {
+                () = &mut download_chapter_task, if state_is_downloading && permit.is_some() => break,
+                control_flow = self.acquire_chapter_permit(&mut permit), if state_is_pending => {
+                    match control_flow {
+                        ControlFlow::Continue(()) => continue,
+                        ControlFlow::Break(()) => break,
+                    }
+                },
+                _ = state_receiver.changed() => {
+                    match self.handle_state_change(&mut permit, &mut state_receiver) {
+                        ControlFlow::Continue(()) => continue,
+                        ControlFlow::Break(()) => break,
+                    }
+                }
+            }
         }
     }
 
     #[allow(clippy::cast_possible_truncation)]
-    #[allow(clippy::too_many_lines)] // TODO: 重构此方法，减少代码行数
-    async fn process_chapter(self, chapter_info: ChapterInfo) {
-        let chapter_id = chapter_info.chapter_id;
-        let comic_title = &chapter_info.comic_title;
-        let group_name = &chapter_info.group_name;
-        let chapter_title = &chapter_info.chapter_title;
-        let err_prefix = format!("`{comic_title} - {group_name} - {chapter_title}`");
-        // 发送章节排队事件
-        let _ = DownloadEvent::ChapterPending {
-            chapter_id,
-            comic_title: comic_title.clone(),
-            chapter_title: chapter_title.clone(),
-        }
-        .emit(&self.app);
-        tracing::trace!(
-            chapter_id,
-            comic_title,
-            group_name,
-            chapter_title,
-            "章节开始排队"
-        );
-        // 限制同时下载的章节数量
-        let permit = match self
-            .chapter_sem
-            .acquire()
-            .await
-            .map_err(anyhow::Error::from)
-        {
-            Ok(permit) => permit,
-            Err(err) => {
-                let err_title = format!("{err_prefix}获取下载章节的semaphore失败");
-                let string_chain = err.to_string_chain();
-                tracing::error!(err_title, message = string_chain);
-                // 发送章节下载结束事件
-                let _ = DownloadEvent::ChapterEnd { chapter_id }.emit(&self.app);
-                return;
-            }
-        };
-        tracing::trace!(
-            chapter_id,
-            comic_title,
-            group_name,
-            chapter_title,
-            "章节开始获取图片链接"
-        );
-        // 获取此章节每张图片的下载链接
-        let urls = match self.manhuagui_client().get_image_urls(&chapter_info).await {
-            Ok(urls) => urls,
-            Err(err) => {
-                let err_title = format!("{err_prefix}获取图片链接失败");
-                let string_chain = err.to_string_chain();
-                tracing::error!(err_title, message = string_chain);
-                // 发送下载结束事件
-                let _ = DownloadEvent::ChapterEnd { chapter_id }.emit(&self.app);
-                return;
-            }
-        };
-        // 总共需要下载的图片数量
-        let total = urls.len() as u32;
-        // 记录成功下载的图片数量
-        let downloaded_count = Arc::new(AtomicU32::new(0));
-        let mut join_set = JoinSet::new();
-        // 创建临时下载目录
-        let temp_download_dir = get_temp_download_dir(&self.app, &chapter_info);
-        if let Err(err) = std::fs::create_dir_all(&temp_download_dir).map_err(anyhow::Error::from) {
-            let err_title = format!("{err_prefix}创建目录`{temp_download_dir:?}`失败");
-            let string_chain = err.to_string_chain();
-            tracing::error!(err_title, message = string_chain);
-            // 发送下载结束事件
-            let _ = DownloadEvent::ChapterEnd { chapter_id }.emit(&self.app);
+    async fn download_chapter(&self) {
+        let chapter_id = self.chapter_info.chapter_id;
+        let comic_title = &self.chapter_info.comic_title;
+        let group_name = &self.chapter_info.group_name;
+        let chapter_title = &self.chapter_info.chapter_title;
+
+        let Some(img_urls) = self.get_img_urls().await else {
             return;
-        }
-        tracing::trace!(
-            chapter_id,
-            comic_title,
-            group_name,
-            chapter_title,
-            "创建临时下载目录`{temp_download_dir:?}`成功",
-        );
-        // 发送下载开始事件
-        let _ = DownloadEvent::ChapterStart { chapter_id, total }.emit(&self.app);
-        // 逐一创建下载任务
-        for (i, url) in urls.into_iter().enumerate() {
-            let manager = self.clone();
+        };
+
+        let Some(temp_download_dir) = self.create_temp_download_dir() else {
+            return;
+        };
+
+        self.total_img_count
+            .store(img_urls.len() as u32, Ordering::Relaxed);
+
+        let mut join_set = JoinSet::new();
+        for (i, url) in img_urls.into_iter().enumerate() {
             let save_path = temp_download_dir.join(format!("{:03}.jpg", i + 1));
             let url = url.clone();
-            let downloaded_count = downloaded_count.clone();
+            let download_img_task = DownloadImgTask::new(self, url, save_path);
             // 创建下载任务
-            join_set.spawn(manager.download_image(url, save_path, chapter_id, downloaded_count));
+            join_set.spawn(download_img_task.process());
         }
         // 等待所有下载任务完成
         join_set.join_all().await;
@@ -184,26 +232,30 @@ impl DownloadManager {
             chapter_title,
             "所有图片下载任务完成"
         );
-        // 每个章节下载完成后，等待一段时间再下载下一个章节
-        self.sleep_between_chapters(chapter_id).await;
-        drop(permit);
         // 检查此章节的图片是否全部下载成功
-        let downloaded_count = downloaded_count.load(Ordering::Relaxed);
+        let downloaded_img_count = self.downloaded_img_count.load(Ordering::Relaxed);
+        let total_img_count = self.total_img_count.load(Ordering::Relaxed);
         // 此章节的图片未全部下载成功
-        if downloaded_count != total {
-            let err_title = format!("{err_prefix}下载不完整");
-            let err_msg = format!("总共有`{total}`张图片，但只下载了`{downloaded_count}`张");
+        if downloaded_img_count != total_img_count {
+            let err_title = format!("`{comic_title} - {group_name} - {chapter_title}`下载不完整");
+            let err_msg =
+                format!("总共有`{total_img_count}`张图片，但只下载了`{downloaded_img_count}`张");
             tracing::error!(err_title, message = err_msg);
-            // 发送章节下载结束事件
-            let _ = DownloadEvent::ChapterEnd { chapter_id }.emit(&self.app);
+
+            self.set_state(DownloadTaskState::Failed);
+            self.emit_download_task_event();
+
             return;
         }
-        if let Err(err) = rename_temp_download_dir(&chapter_info, &temp_download_dir) {
-            let err_title = format!("{err_prefix}重命名临时目录失败");
+        if let Err(err) = self.rename_temp_download_dir(&temp_download_dir) {
+            let err_title =
+                format!("`{comic_title} - {group_name} - {chapter_title}`重命名临时目录失败");
             let string_chain = err.to_string_chain();
             tracing::error!(err_title, message = string_chain);
-            // 发送章节下载结束事件
-            let _ = DownloadEvent::ChapterEnd { chapter_id }.emit(&self.app);
+
+            self.set_state(DownloadTaskState::Failed);
+            self.emit_download_task_event();
+
             return;
         }
         tracing::trace!(
@@ -221,11 +273,209 @@ impl DownloadManager {
             chapter_title,
             "章节下载成功"
         );
+        // 每个章节下载完成后，等待一段时间
+        self.sleep_between_chapters().await;
         // 发送下载结束事件
-        let _ = DownloadEvent::ChapterEnd { chapter_id }.emit(&self.app);
+        self.set_state(DownloadTaskState::Completed);
+        self.emit_download_task_event();
     }
 
-    async fn sleep_between_chapters(&self, chapter_id: i64) {
+    async fn acquire_chapter_permit<'a>(
+        &'a self,
+        permit: &mut Option<SemaphorePermit<'a>>,
+    ) -> ControlFlow<()> {
+        let chapter_id = self.chapter_info.chapter_id;
+        let comic_title = &self.chapter_info.comic_title;
+        let group_name = &self.chapter_info.group_name;
+        let chapter_title = &self.chapter_info.chapter_title;
+
+        tracing::debug!(
+            chapter_id,
+            comic_title,
+            group_name,
+            chapter_title,
+            "章节开始排队"
+        );
+
+        self.emit_download_task_event();
+
+        *permit = match permit.take() {
+            // 如果有permit，则直接用
+            Some(permit) => Some(permit),
+            // 如果没有permit，则获取permit
+            None => match self
+                .download_manager
+                .chapter_sem
+                .acquire()
+                .await
+                .map_err(anyhow::Error::from)
+            {
+                Ok(permit) => Some(permit),
+                Err(err) => {
+                    let err_title = format!(
+                        "`{comic_title} - {group_name} - {chapter_title}`获取下载章节的permit失败"
+                    );
+                    let string_chain = err.to_string_chain();
+                    tracing::error!(err_title, message = string_chain);
+
+                    self.set_state(DownloadTaskState::Failed);
+                    self.emit_download_task_event();
+
+                    return ControlFlow::Break(());
+                }
+            },
+        };
+        // 如果当前任务状态不是`Pending`，则不将任务状态设置为`Downloading`
+        if *self.state_sender.borrow() != DownloadTaskState::Pending {
+            return ControlFlow::Continue(());
+        }
+        // 将任务状态设置为`Downloading`
+        if let Err(err) = self
+            .state_sender
+            .send(DownloadTaskState::Downloading)
+            .map_err(anyhow::Error::from)
+        {
+            let err_title = format!(
+                "`{comic_title} - {group_name} - {chapter_title}`发送状态`Downloading`失败"
+            );
+            let string_chain = err.to_string_chain();
+            tracing::error!(err_title, message = string_chain);
+            return ControlFlow::Break(());
+        }
+        ControlFlow::Continue(())
+    }
+
+    fn handle_state_change<'a>(
+        &'a self,
+        permit: &mut Option<SemaphorePermit<'a>>,
+        state_receiver: &mut watch::Receiver<DownloadTaskState>,
+    ) -> ControlFlow<()> {
+        let chapter_id = self.chapter_info.chapter_id;
+        let comic_title = &self.chapter_info.comic_title;
+        let group_name = &self.chapter_info.group_name;
+        let chapter_title = &self.chapter_info.chapter_title;
+
+        self.emit_download_task_event();
+        let state = *state_receiver.borrow();
+        match state {
+            DownloadTaskState::Paused => {
+                tracing::debug!(
+                    chapter_id,
+                    comic_title,
+                    group_name,
+                    chapter_title,
+                    "章节暂停中"
+                );
+                if let Some(permit) = permit.take() {
+                    drop(permit);
+                };
+                ControlFlow::Continue(())
+            }
+            DownloadTaskState::Cancelled => {
+                tracing::debug!(
+                    chapter_id,
+                    comic_title,
+                    group_name,
+                    chapter_title,
+                    "章节取消下载"
+                );
+                ControlFlow::Break(())
+            }
+            _ => ControlFlow::Continue(()),
+        }
+    }
+
+    async fn get_img_urls(&self) -> Option<Vec<String>> {
+        let chapter_id = self.chapter_info.chapter_id;
+        let comic_title = &self.chapter_info.comic_title;
+        let group_name = &self.chapter_info.group_name;
+        let chapter_title = &self.chapter_info.chapter_title;
+
+        tracing::trace!(
+            chapter_id,
+            comic_title,
+            group_name,
+            chapter_title,
+            "章节开始获取图片链接"
+        );
+        let img_urls = match self
+            .manhuagui_client()
+            .get_img_urls(&self.chapter_info)
+            .await
+        {
+            Ok(urls) => urls,
+            Err(err) => {
+                let err_title =
+                    format!("`{comic_title} - {group_name} - {chapter_title}`获取图片链接失败");
+                let string_chain = err.to_string_chain();
+                tracing::error!(err_title, message = string_chain);
+
+                self.set_state(DownloadTaskState::Failed);
+                self.emit_download_task_event();
+
+                return None;
+            }
+        };
+        Some(img_urls)
+    }
+
+    fn create_temp_download_dir(&self) -> Option<PathBuf> {
+        let chapter_id = self.chapter_info.chapter_id;
+        let comic_title = &self.chapter_info.comic_title;
+        let group_name = &self.chapter_info.group_name;
+        let chapter_title = &self.chapter_info.chapter_title;
+        let prefixed_chapter_title = &self.chapter_info.prefixed_chapter_title;
+
+        let temp_download_dir = self
+            .app
+            .state::<RwLock<Config>>()
+            .read()
+            .download_dir
+            .join(comic_title)
+            .join(group_name)
+            .join(format!(".下载中-{prefixed_chapter_title}")); // 以 `.下载中-` 开头，表示是临时目录
+
+        if let Err(err) = std::fs::create_dir_all(&temp_download_dir).map_err(anyhow::Error::from) {
+            let err_title = format!("`{comic_title} - {group_name} - {chapter_title}`创建目录`{temp_download_dir:?}`失败");
+            let string_chain = err.to_string_chain();
+            tracing::error!(err_title, message = string_chain);
+
+            self.set_state(DownloadTaskState::Failed);
+            self.emit_download_task_event();
+
+            return None;
+        }
+        tracing::trace!(
+            chapter_id,
+            comic_title,
+            group_name,
+            chapter_title,
+            "创建临时下载目录`{temp_download_dir:?}`成功",
+        );
+        Some(temp_download_dir)
+    }
+
+    fn rename_temp_download_dir(&self, temp_download_dir: &Path) -> anyhow::Result<()> {
+        let Some(parent) = temp_download_dir.parent() else {
+            return Err(anyhow!("无法获取`{temp_download_dir:?}`的父目录"));
+        };
+
+        let download_dir = parent.join(&self.chapter_info.prefixed_chapter_title);
+
+        if download_dir.exists() {
+            std::fs::remove_dir_all(&download_dir)
+                .context(format!("删除目录`{download_dir:?}`失败"))?;
+        }
+
+        std::fs::rename(temp_download_dir, &download_dir).context(format!(
+            "将`{temp_download_dir:?}`重命名为`{download_dir:?}`失败"
+        ))?;
+
+        Ok(())
+    }
+
+    async fn sleep_between_chapters(&self) {
+        let chapter_id = self.chapter_info.chapter_id;
         let mut remaining_sec = self
             .app
             .state::<RwLock<Config>>()
@@ -233,7 +483,7 @@ impl DownloadManager {
             .download_interval_sec;
         while remaining_sec > 0 {
             // 发送章节休眠事件
-            let _ = DownloadEvent::ChapterSleeping {
+            let _ = DownloadEvent::Sleeping {
                 chapter_id,
                 remaining_sec,
             }
@@ -243,26 +493,104 @@ impl DownloadManager {
         }
     }
 
-    async fn download_image(
-        self,
-        url: String,
-        save_path: PathBuf,
-        chapter_id: i64,
-        current: Arc<AtomicU32>,
-    ) {
-        // 下载图片
-        tracing::trace!(chapter_id, url, "图片开始排队");
-        let permit = match self.img_sem.acquire().await.map_err(anyhow::Error::from) {
-            Ok(permit) => permit,
-            Err(err) => {
-                let err_title = "获取下载图片的semaphore失败";
-                let string_chain = err.to_string_chain();
-                tracing::error!(err_title, message = string_chain);
-                return;
+    fn set_state(&self, state: DownloadTaskState) {
+        let comic_title = &self.chapter_info.comic_title;
+        let group_name = &self.chapter_info.group_name;
+        let chapter_title = &self.chapter_info.chapter_title;
+        if let Err(err) = self.state_sender.send(state).map_err(anyhow::Error::from) {
+            let err_title =
+                format!("`{comic_title} - {group_name} - {chapter_title}`发送状态`{state:?}`失败");
+            let string_chain = err.to_string_chain();
+            tracing::error!(err_title, message = string_chain);
+        }
+    }
+
+    fn emit_download_task_event(&self) {
+        let _ = DownloadTaskEvent {
+            state: *self.state_sender.borrow(),
+            chapter_info: self.chapter_info.as_ref().clone(),
+            downloaded_img_count: self.downloaded_img_count.load(Ordering::Relaxed),
+            total_img_count: self.total_img_count.load(Ordering::Relaxed),
+        }
+        .emit(&self.app);
+    }
+    fn manhuagui_client(&self) -> ManhuaguiClient {
+        self.app.state::<ManhuaguiClient>().inner().clone()
+    }
+}
+
+#[derive(Clone)]
+struct DownloadImgTask {
+    app: AppHandle,
+    download_manager: DownloadManager,
+    chapter_info: Arc<ChapterInfo>,
+    state_sender: watch::Sender<DownloadTaskState>,
+    downloaded_img_count: Arc<AtomicU32>,
+    total_img_count: Arc<AtomicU32>,
+    url: String,
+    save_path: PathBuf,
+}
+
+impl DownloadImgTask {
+    pub fn new(download_task: &DownloadTask, url: String, save_path: PathBuf) -> Self {
+        Self {
+            app: download_task.app.clone(),
+            download_manager: download_task.download_manager.clone(),
+            chapter_info: download_task.chapter_info.clone(),
+            state_sender: download_task.state_sender.clone(),
+            downloaded_img_count: download_task.downloaded_img_count.clone(),
+            total_img_count: download_task.total_img_count.clone(),
+            url,
+            save_path,
+        }
+    }
+
+    async fn process(self) {
+        let download_img_task = self.download_img();
+        tokio::pin!(download_img_task);
+
+        let mut state_receiver = self.state_sender.subscribe();
+        state_receiver.mark_changed();
+        let mut permit = None;
+
+        loop {
+            let state_is_downloading = *state_receiver.borrow() == DownloadTaskState::Downloading;
+            tokio::select! {
+                () = &mut download_img_task, if state_is_downloading && permit.is_some() => break,
+                control_flow = self.acquire_img_permit(&mut permit), if state_is_downloading && permit.is_none() => {
+                    match control_flow {
+                        ControlFlow::Continue(()) => continue,
+                        ControlFlow::Break(()) => break,
+                    }
+                },
+                _ = state_receiver.changed() => {
+                    match self.handle_state_change(&mut permit, &mut state_receiver) {
+                        ControlFlow::Continue(()) => continue,
+                        ControlFlow::Break(()) => break,
+                    }
+                }
             }
-        };
-        tracing::trace!(chapter_id, url, "图片开始下载");
-        let image_data = match self.manhuagui_client().get_image_bytes(&url).await {
+        }
+    }
+
+    async fn download_img(&self) {
+        let url = &self.url;
+        let save_path = &self.save_path;
+        let chapter_id = self.chapter_info.chapter_id;
+        let comic_title = &self.chapter_info.comic_title;
+        let group_name = &self.chapter_info.group_name;
+        let chapter_title = &self.chapter_info.chapter_title;
+
+        tracing::trace!(
+            chapter_id,
+            comic_title,
+            group_name,
+            chapter_title,
+            url,
+            "开始下载图片"
+        );
+
+        let img_data = match self.manhuagui_client().get_img_bytes(url).await {
             Ok(data) => data,
             Err(err) => {
                 let err_title = format!("下载图片`{url}`失败");
@@ -271,10 +599,17 @@ impl DownloadManager {
                 return;
             }
         };
-        drop(permit);
-        tracing::trace!(chapter_id, url, "图片成功下载到内存");
+
+        tracing::trace!(
+            chapter_id,
+            comic_title,
+            group_name,
+            chapter_title,
+            url,
+            "图片成功下载到内存"
+        );
         // 保存图片
-        if let Err(err) = std::fs::write(&save_path, &image_data).map_err(anyhow::Error::from) {
+        if let Err(err) = std::fs::write(save_path, &img_data).map_err(anyhow::Error::from) {
             let err_title = format!("保存图片`{save_path:?}`失败");
             let string_chain = err.to_string_chain();
             tracing::error!(err_title, message = string_chain);
@@ -282,52 +617,107 @@ impl DownloadManager {
         }
         tracing::trace!(chapter_id, url, "图片成功保存到`{save_path:?}`");
         // 记录下载字节数
-        self.byte_per_sec
-            .fetch_add(image_data.len() as u64, Ordering::Relaxed);
+        self.download_manager
+            .byte_per_sec
+            .fetch_add(img_data.len() as u64, Ordering::Relaxed);
         tracing::debug!(chapter_id, url, "图片下载成功");
-        // 更新章节下载进度
-        let current = current.fetch_add(1, Ordering::Relaxed) + 1;
-        // 发送下载图片成功事件
-        let _ = DownloadEvent::ImageSuccess {
-            chapter_id,
-            url,
-            current,
+
+        let _ = DownloadTaskEvent {
+            state: *self.state_sender.borrow(),
+            chapter_info: self.chapter_info.as_ref().clone(),
+            downloaded_img_count: self.downloaded_img_count.fetch_add(1, Ordering::Relaxed) + 1,
+            total_img_count: self.total_img_count.load(Ordering::Relaxed),
         }
         .emit(&self.app);
+    }
+
+    async fn acquire_img_permit<'a>(
+        &'a self,
+        permit: &mut Option<SemaphorePermit<'a>>,
+    ) -> ControlFlow<()> {
+        let url = &self.url;
+        let chapter_id = self.chapter_info.chapter_id;
+        let comic_title = &self.chapter_info.comic_title;
+        let group_name = &self.chapter_info.group_name;
+        let chapter_title = &self.chapter_info.chapter_title;
+
+        tracing::trace!(
+            chapter_id,
+            comic_title,
+            group_name,
+            chapter_title,
+            url,
+            "图片开始排队"
+        );
+
+        *permit = match permit.take() {
+            // 如果有permit，则直接用
+            Some(permit) => Some(permit),
+            // 如果没有permit，则获取permit
+            None => match self
+                .download_manager
+                .img_sem
+                .acquire()
+                .await
+                .map_err(anyhow::Error::from)
+            {
+                Ok(permit) => Some(permit),
+                Err(err) => {
+                    let err_title = format!(
+                        "`{comic_title} - {group_name} - {chapter_title}`获取下载图片的permit失败"
+                    );
+                    let string_chain = err.to_string_chain();
+                    tracing::error!(err_title, message = string_chain);
+                    return ControlFlow::Break(());
+                }
+            },
+        };
+        ControlFlow::Continue(())
+    }
+
+    fn handle_state_change<'a>(
+        &'a self,
+        permit: &mut Option<SemaphorePermit<'a>>,
+        state_receiver: &mut watch::Receiver<DownloadTaskState>,
+    ) -> ControlFlow<()> {
+        let url = &self.url;
+        let chapter_id = self.chapter_info.chapter_id;
+        let comic_title = &self.chapter_info.comic_title;
+        let group_name = &self.chapter_info.group_name;
+        let chapter_title = &self.chapter_info.chapter_title;
+
+        let state = *state_receiver.borrow();
+        match state {
+            DownloadTaskState::Paused => {
+                tracing::trace!(
+                    chapter_id,
+                    comic_title,
+                    group_name,
+                    chapter_title,
+                    url,
+                    "图片暂停下载"
+                );
+                if let Some(permit) = permit.take() {
+                    drop(permit);
+                };
+                ControlFlow::Continue(())
+            }
+            DownloadTaskState::Cancelled => {
+                tracing::trace!(
+                    chapter_id,
+                    comic_title,
+                    group_name,
+                    chapter_title,
+                    url,
+                    "图片取消下载"
+                );
+                ControlFlow::Break(())
+            }
+            _ => ControlFlow::Continue(()),
+        }
     }
 
     fn manhuagui_client(&self) -> ManhuaguiClient {
         self.app.state::<ManhuaguiClient>().inner().clone()
     }
-}
-
-fn get_temp_download_dir(app: &AppHandle, chapter_info: &ChapterInfo) -> PathBuf {
-    app.state::<RwLock<Config>>()
-        .read()
-        .download_dir
-        .join(&chapter_info.comic_title)
-        .join(&chapter_info.group_name)
-        .join(format!(".下载中-{}", chapter_info.prefixed_chapter_title)) // 以 `.下载中-` 开头，表示是临时目录
-}
-
-fn rename_temp_download_dir(
-    chapter_info: &ChapterInfo,
-    temp_download_dir: &Path,
-) -> anyhow::Result<()> {
-    let Some(parent) = temp_download_dir.parent() else {
-        return Err(anyhow!("无法获取`{temp_download_dir:?}`的父目录"));
-    };
-
-    let download_dir = parent.join(&chapter_info.prefixed_chapter_title);
-
-    if download_dir.exists() {
-        std::fs::remove_dir_all(&download_dir)
-            .context(format!("删除目录`{download_dir:?}`失败"))?;
-    }
-
-    std::fs::rename(temp_download_dir, &download_dir).context(format!(
-        "将`{temp_download_dir:?}`重命名为`{download_dir:?}`失败"
-    ))?;
-
-    Ok(())
 }

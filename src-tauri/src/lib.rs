@@ -14,7 +14,8 @@ mod utils;
 use config::Config;
 use download_manager::DownloadManager;
 use events::{
-    DownloadEvent, ExportCbzEvent, ExportPdfEvent, LogEvent, UpdateDownloadedComicsEvent,
+    DownloadEvent, DownloadTaskEvent, ExportCbzEvent, ExportPdfEvent, LogEvent,
+    UpdateDownloadedComicsEvent,
 };
 use manhuagui_client::ManhuaguiClient;
 use parking_lot::RwLock;
@@ -46,6 +47,9 @@ pub fn run() {
             update_downloaded_comics,
             get_logs_dir_size,
             show_path_in_file_manager,
+            pause_download_task,
+            resume_download_task,
+            cancel_download_task,
         ])
         .events(tauri_specta::collect_events![
             DownloadEvent,
@@ -53,6 +57,7 @@ pub fn run() {
             ExportPdfEvent,
             UpdateDownloadedComicsEvent,
             LogEvent,
+            DownloadTaskEvent,
         ]);
 
     #[cfg(debug_assertions)]
@@ -73,8 +78,6 @@ pub fn run() {
         .setup(move |app| {
             builder.mount_events(app);
 
-            logger::init(app.handle())?;
-
             let config = RwLock::new(Config::new(app.handle())?);
             app.manage(config);
 
@@ -83,6 +86,8 @@ pub fn run() {
 
             let download_manager = DownloadManager::new(app.handle());
             app.manage(download_manager);
+
+            logger::init(app.handle())?;
 
             Ok(())
         })

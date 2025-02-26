@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import './App.css'
+import './styles/global.css'
 import { commands, Config } from './bindings.ts'
 import { App as AntdApp, ConfigProvider } from 'antd'
 import zhCN from 'antd/es/locale/zh_CN'
