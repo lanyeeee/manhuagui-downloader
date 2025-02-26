@@ -56,7 +56,7 @@ function LogViewer({ logViewerShowing, setLogViewerShowing, config, setConfig }:
       mounted = false
       unListenLogEvent?.()
     }
-  }, [])
+  }, [notification])
 
   useEffect(() => {
     if (!logViewerShowing) {
