@@ -1,6 +1,7 @@
 import { Modal, Typography } from 'antd'
 import { useEffect, useState } from 'react'
 import { getVersion } from '@tauri-apps/api/app'
+import icon from '../../src-tauri/icons/128x128.png'
 
 interface Props {
   aboutDialogShowing: boolean
@@ -17,7 +18,7 @@ export function AboutDialog({ aboutDialogShowing, setAboutDialogShowing }: Props
   return (
     <Modal open={aboutDialogShowing} onCancel={() => setAboutDialogShowing(false)} footer={null}>
       <div className="flex flex-col items-center gap-row-6">
-        <img src="../../src-tauri/icons/128x128.png" alt="logo" className="w-32 h-32" />
+        <img src={icon} alt="icon" className="w-32 h-32" />
         <div className="text-center text-gray-400 text-xs">
           <div>
             如果本项目对你有帮助，欢迎来
