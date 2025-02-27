@@ -301,6 +301,7 @@ function ChapterTabs({
                     key={chapter.chapterId}
                     data-key={chapter.chapterId}>
                     <Checkbox
+                      value={chapter.chapterId}
                       className={styles.antdCheckBox}
                       checked={checkedIds.has(chapter.chapterId)}
                       disabled={chapter.isDownloaded === true}
