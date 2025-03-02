@@ -48,10 +48,16 @@ pub struct DownloadManager {
 
 impl DownloadManager {
     pub fn new(app: &AppHandle) -> Self {
+        let (chapter_concurrency, img_concurrency) = {
+            let config = app.state::<RwLock<Config>>();
+            let config = config.read();
+            (config.chapter_concurrency, config.img_concurrency)
+        };
+
         let manager = DownloadManager {
             app: app.clone(),
-            chapter_sem: Arc::new(Semaphore::new(1)),
-            img_sem: Arc::new(Semaphore::new(10)),
+            chapter_sem: Arc::new(Semaphore::new(chapter_concurrency)),
+            img_sem: Arc::new(Semaphore::new(img_concurrency)),
             byte_per_sec: Arc::new(AtomicU64::new(0)),
             download_tasks: Arc::new(RwLock::new(HashMap::new())),
         };
@@ -480,7 +486,7 @@ impl DownloadTask {
             .app
             .state::<RwLock<Config>>()
             .read()
-            .download_interval_sec;
+            .chapter_download_interval_sec;
         while remaining_sec > 0 {
             // 发送章节休眠事件
             let _ = DownloadEvent::Sleeping {
@@ -629,6 +635,13 @@ impl DownloadImgTask {
             total_img_count: self.total_img_count.load(Ordering::Relaxed),
         }
         .emit(&self.app);
+
+        let img_download_interval_sec = self
+            .app
+            .state::<RwLock<Config>>()
+            .read()
+            .img_download_interval_sec;
+        sleep(Duration::from_secs(img_download_interval_sec)).await;
     }
 
     async fn acquire_img_permit<'a>(
