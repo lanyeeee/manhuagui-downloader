@@ -48,10 +48,16 @@ pub struct DownloadManager {
 
 impl DownloadManager {
     pub fn new(app: &AppHandle) -> Self {
+        let (chapter_concurrency, img_concurrency) = {
+            let config = app.state::<RwLock<Config>>();
+            let config = config.read();
+            (config.chapter_concurrency, config.img_concurrency)
+        };
+
         let manager = DownloadManager {
             app: app.clone(),
-            chapter_sem: Arc::new(Semaphore::new(1)),
-            img_sem: Arc::new(Semaphore::new(10)),
+            chapter_sem: Arc::new(Semaphore::new(chapter_concurrency)),
+            img_sem: Arc::new(Semaphore::new(img_concurrency)),
             byte_per_sec: Arc::new(AtomicU64::new(0)),
             download_tasks: Arc::new(RwLock::new(HashMap::new())),
         };

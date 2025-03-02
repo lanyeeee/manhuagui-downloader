@@ -1,5 +1,5 @@
 import { commands, Config } from '../bindings.ts'
-import { Button, InputNumber, Modal } from 'antd'
+import { App as AntdApp, Button, InputNumber, Modal } from 'antd'
 import { path } from '@tauri-apps/api'
 import { appDataDir } from '@tauri-apps/api/path'
 
@@ -11,6 +11,8 @@ interface Props {
 }
 
 function SettingsDialog({ settingsDialogShowing, setSettingsDialogShowing, config, setConfig }: Props) {
+  const { message } = AntdApp.useApp()
+
   async function showConfigPathInFileManager() {
     const configPath = await path.join(await appDataDir(), 'config.json')
     const result = await commands.showPathInFileManager(configPath)
@@ -21,7 +23,7 @@ function SettingsDialog({ settingsDialogShowing, setSettingsDialogShowing, confi
 
   return (
     <Modal title="更多设置" open={settingsDialogShowing} onCancel={() => setSettingsDialogShowing(false)} footer={null}>
-      <div className="flex flex-col">
+      <div className="flex flex-col gap-row-2">
         <InputNumber
           size="small"
           addonBefore="每个章节下载完成后休息"
@@ -33,6 +35,32 @@ function SettingsDialog({ settingsDialogShowing, setSettingsDialogShowing, confi
               return
             }
             setConfig({ ...config, downloadIntervalSec: value })
+          }}
+        />
+        <InputNumber
+          size="small"
+          addonBefore="章节并发数"
+          defaultValue={config.chapterConcurrency}
+          min={1}
+          onChange={async (value) => {
+            if (value === null) {
+              return
+            }
+            message.warning('对章节并发数的修改需要重启才能生效')
+            setConfig({ ...config, chapterConcurrency: value })
+          }}
+        />
+        <InputNumber
+          size="small"
+          addonBefore="图片并发数"
+          defaultValue={config.imgConcurrency}
+          min={1}
+          onChange={async (value) => {
+            if (value === null) {
+              return
+            }
+            message.warning('对图片并发数的修改需要重启才能生效')
+            setConfig({ ...config, imgConcurrency: value })
           }}
         />
         <div className="flex justify-end mt-4">
