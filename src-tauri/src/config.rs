@@ -10,8 +10,11 @@ pub struct Config {
     pub cookie: String,
     pub download_dir: PathBuf,
     pub export_dir: PathBuf,
-    pub download_interval_sec: u64,
     pub enable_file_logger: bool,
+    pub chapter_concurrency: usize,
+    pub chapter_download_interval_sec: u64,
+    pub img_concurrency: usize,
+    pub img_download_interval_sec: u64,
 }
 
 impl Config {
@@ -70,8 +73,11 @@ impl Config {
             cookie: String::new(),
             download_dir: app_data_dir.join("漫画下载"),
             export_dir: app_data_dir.join("漫画导出"),
-            download_interval_sec: 10,
             enable_file_logger: true,
+            chapter_concurrency: 1,
+            chapter_download_interval_sec: 10,
+            img_concurrency: 10,
+            img_download_interval_sec: 0,
         }
     }
 }
