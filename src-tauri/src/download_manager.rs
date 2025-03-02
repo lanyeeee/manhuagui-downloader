@@ -486,7 +486,7 @@ impl DownloadTask {
             .app
             .state::<RwLock<Config>>()
             .read()
-            .download_interval_sec;
+            .chapter_download_interval_sec;
         while remaining_sec > 0 {
             // 发送章节休眠事件
             let _ = DownloadEvent::Sleeping {
@@ -635,6 +635,13 @@ impl DownloadImgTask {
             total_img_count: self.total_img_count.load(Ordering::Relaxed),
         }
         .emit(&self.app);
+
+        let img_download_interval_sec = self
+            .app
+            .state::<RwLock<Config>>()
+            .read()
+            .img_download_interval_sec;
+        sleep(Duration::from_secs(img_download_interval_sec)).await;
     }
 
     async fn acquire_img_permit<'a>(
