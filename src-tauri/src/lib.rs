@@ -11,6 +11,7 @@ mod manhuagui_client;
 mod types;
 mod utils;
 
+use anyhow::Context;
 use config::Config;
 use download_manager::DownloadManager;
 use events::{
@@ -77,6 +78,14 @@ pub fn run() {
         .invoke_handler(builder.invoke_handler())
         .setup(move |app| {
             builder.mount_events(app);
+
+            let app_data_dir = app
+                .path()
+                .app_data_dir()
+                .context("获取app_data_dir目录失败")?;
+
+            std::fs::create_dir_all(&app_data_dir)
+                .context(format!("创建app_data_dir目录`{app_data_dir:?}`失败"))?;
 
             let config = RwLock::new(Config::new(app.handle())?);
             app.manage(config);
