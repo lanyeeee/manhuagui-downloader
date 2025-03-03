@@ -1,10 +1,11 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, time::Duration};
 
 use anyhow::Context;
 use parking_lot::RwLock;
 use tauri::{AppHandle, Manager, State};
 use tauri_plugin_opener::OpenerExt;
 use tauri_specta::Event;
+use tokio::time::sleep;
 
 use crate::{
     config::Config,
@@ -261,6 +262,12 @@ pub async fn update_downloaded_comics(
     // 发送正在获取漫画事件
     let total = downloaded_comics.len() as i64;
     let _ = UpdateDownloadedComicsEvent::GettingComics { total }.emit(&app);
+
+    let update_get_comic_interval_sec = app
+        .state::<RwLock<Config>>()
+        .read()
+        .update_get_comic_interval_sec;
+
     // 获取已下载漫画的最新信息，不用并发是有意为之，防止被封IP
     for (i, downloaded_comic) in downloaded_comics.iter().enumerate() {
         // 获取最新的漫画信息
@@ -272,6 +279,7 @@ pub async fn update_downloaded_comics(
         // 发送获取到漫画事件
         let current = i as i64 + 1;
         let _ = UpdateDownloadedComicsEvent::ComicGot { current, total }.emit(&app);
+        sleep(Duration::from_secs(update_get_comic_interval_sec)).await;
     }
     // 至此，已下载的漫画的最新信息已获取完毕
     let chapters_to_download = latest_comics
