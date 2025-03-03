@@ -50,14 +50,6 @@ static RELOAD_FN: OnceLock<Box<dyn Fn() -> anyhow::Result<()> + Send + Sync>> = 
 static GUARD: OnceLock<parking_lot::Mutex<Option<WorkerGuard>>> = OnceLock::new();
 
 pub fn init(app: &AppHandle) -> anyhow::Result<()> {
-    let app_data_dir = app
-        .path()
-        .app_data_dir()
-        .context("获取app_data_dir目录失败")?;
-
-    std::fs::create_dir_all(&app_data_dir)
-        .context(format!("创建app_data_dir目录`{app_data_dir:?}`失败"))?;
-
     let lib_module_path = module_path!();
     let lib_target = lib_module_path.split("::").next().context(format!(
         "解析lib_target失败: lib_module_path={lib_module_path}"
