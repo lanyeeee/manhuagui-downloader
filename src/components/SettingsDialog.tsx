@@ -80,6 +80,19 @@ function SettingsDialog({ settingsDialogShowing, setSettingsDialogShowing, confi
             }}
           />
         </div>
+        <InputNumber
+          size="small"
+          addonBefore="更新库存时，每获取完一个已下载漫画的最新数据后休息"
+          defaultValue={config.updateGetComicIntervalSec}
+          addonAfter="秒"
+          min={0}
+          onChange={(value) => {
+            if (value === null) {
+              return
+            }
+            setConfig({ ...config, updateGetComicIntervalSec: value })
+          }}
+        />
         <div className="flex justify-end mt-4">
           <Button size="small" onClick={showConfigPathInFileManager}>
             打开配置目录

@@ -15,6 +15,7 @@ pub struct Config {
     pub chapter_download_interval_sec: u64,
     pub img_concurrency: usize,
     pub img_download_interval_sec: u64,
+    pub update_get_comic_interval_sec: u64,
 }
 
 impl Config {
@@ -78,6 +79,7 @@ impl Config {
             chapter_download_interval_sec: 10,
             img_concurrency: 10,
             img_download_interval_sec: 0,
+            update_get_comic_interval_sec: 0,
         }
     }
 }
