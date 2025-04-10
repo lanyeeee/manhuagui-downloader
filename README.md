@@ -1,5 +1,5 @@
 <p align="center">
-    <img src="https://github.com/user-attachments/assets/ff5277b4-ae04-49b9-8572-792e3992e29f" style="align-self: center"/>
+    <img src="https://github.com/user-attachments/assets/57367800-664f-436c-a6ab-135ef58a23ca" style="align-self: center"/>
 </p>
 
 # 📚 漫画柜下载器
