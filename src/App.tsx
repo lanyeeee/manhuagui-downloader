@@ -23,7 +23,7 @@ function App() {
 
 // eslint-disable-next-line react/display-name
 export default () => (
-  <AntdApp notification={{ placement: 'bottomRight', showProgress: true }}>
+  <AntdApp notification={{ placement: 'bottomRight', showProgress: true, maxCount: 3 }}>
     <ConfigProvider locale={zhCN}>
       <App />
     </ConfigProvider>
