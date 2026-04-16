@@ -1,4 +1,4 @@
-import { ProgressData } from '../types.ts'
+import { ProgressData } from '../../../types.ts'
 import { useMemo } from 'react'
 
 interface Props {

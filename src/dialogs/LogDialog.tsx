@@ -5,15 +5,15 @@ import { path } from '@tauri-apps/api'
 import { appDataDir } from '@tauri-apps/api/path'
 
 interface Props {
-  logViewerShowing: boolean
-  setLogViewerShowing: (showing: boolean) => void
+  logDialogShowing: boolean
+  setLogDialogShowing: (showing: boolean) => void
   config: Config
   setConfig: (value: Config | undefined | ((prev: Config | undefined) => Config | undefined)) => void
 }
 
 type LogRecord = LogEvent & { id: number; formatedLog: string }
 
-function LogViewer({ logViewerShowing, setLogViewerShowing, config, setConfig }: Props) {
+function LogDialog({ logDialogShowing, setLogDialogShowing, config, setConfig }: Props) {
   const { notification } = AntdApp.useApp()
   const [logRecords, setLogRecords] = useState<LogRecord[]>([])
   const [searchText, setSearchText] = useState('')
@@ -59,7 +59,7 @@ function LogViewer({ logViewerShowing, setLogViewerShowing, config, setConfig }:
   }, [notification])
 
   useEffect(() => {
-    if (!logViewerShowing) {
+    if (!logDialogShowing) {
       return
     }
     commands.getLogsDirSize().then((result) => {
@@ -70,7 +70,7 @@ function LogViewer({ logViewerShowing, setLogViewerShowing, config, setConfig }:
 
       setLogsDirSize(result.data)
     })
-  }, [logViewerShowing])
+  }, [logDialogShowing])
 
   const formatedLogsDirSize = useMemo(() => {
     const units = ['B', 'KB', 'MB']
@@ -156,8 +156,8 @@ function LogViewer({ logViewerShowing, setLogViewerShowing, config, setConfig }:
   return (
     <Modal
       title={<div className="flex items-center">日志目录总大小：{formatedLogsDirSize}</div>}
-      open={logViewerShowing}
-      onCancel={() => setLogViewerShowing(false)}
+      open={logDialogShowing}
+      onCancel={() => setLogDialogShowing(false)}
       width="95%"
       footer={null}>
       <div className="mb-2 flex flex-wrap gap-2">
@@ -212,4 +212,4 @@ function LogViewer({ logViewerShowing, setLogViewerShowing, config, setConfig }:
   )
 }
 
-export default LogViewer
+export default LogDialog

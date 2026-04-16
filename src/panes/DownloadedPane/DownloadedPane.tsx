@@ -1,8 +1,8 @@
-import { Comic, commands, Config, events } from '../bindings.ts'
-import { CurrentTabName } from '../types.ts'
+import { Comic, commands, Config, events } from '../../bindings.ts'
+import { CurrentTabName } from '../../types.ts'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { App as AntdApp, Button, Input, Pagination } from 'antd'
-import DownloadedComicCard from '../components/DownloadedComicCard.tsx'
+import DownloadedComicCard from './components/DownloadedComicCard.tsx'
 import { MessageInstance } from 'antd/es/message/interface'
 import { open } from '@tauri-apps/plugin-dialog'
 

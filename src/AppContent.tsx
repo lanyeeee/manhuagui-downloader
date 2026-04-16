@@ -1,15 +1,15 @@
 import { useEffect, useState } from 'react'
 import { Comic, commands, Config, UserProfile } from './bindings.ts'
 import { App as AntdApp, Avatar, Button, Input, Tabs, TabsProps } from 'antd'
-import LoginDialog from './components/LoginDialog.tsx'
-import DownloadingPane from './panes/DownloadingPane.tsx'
+import LoginDialog from './dialogs/LoginDialog.tsx'
+import ProgressesPane from './panes/ProgressesPane/ProgressesPane.tsx'
 import { CurrentTabName } from './types.ts'
 import SearchPane from './panes/SearchPane.tsx'
 import ChapterPane from './panes/ChapterPane.tsx'
 import FavoritePane from './panes/FavoritePane.tsx'
-import DownloadedPane from './panes/DownloadedPane.tsx'
-import LogViewer from './components/LogViewer.tsx'
-import { AboutDialog } from './components/AboutDialog.tsx'
+import DownloadedPane from './panes/DownloadedPane/DownloadedPane.tsx'
+import LogDialog from './dialogs/LogDialog.tsx'
+import { AboutDialog } from './dialogs/AboutDialog.tsx'
 
 interface Props {
   config: Config
@@ -21,7 +21,7 @@ function AppContent({ config, setConfig }: Props) {
 
   const [userProfile, setUserProfile] = useState<UserProfile>()
   const [loginDialogShowing, setLoginDialogShowing] = useState<boolean>(false)
-  const [logViewerShowing, setLogViewerShowing] = useState<boolean>(false)
+  const [logDialogShowing, setLogDialogShowing] = useState<boolean>(false)
   const [aboutDialogShowing, setAboutDialogShowing] = useState<boolean>(false)
   const [pickedComic, setPickedComic] = useState<Comic>()
 
@@ -99,7 +99,7 @@ function AppContent({ config, setConfig }: Props) {
         <Button type="primary" onClick={() => setLoginDialogShowing(true)}>
           账号登录
         </Button>
-        <Button onClick={() => setLogViewerShowing(true)}>查看日志</Button>
+        <Button onClick={() => setLogDialogShowing(true)}>查看日志</Button>
         <Button onClick={() => setAboutDialogShowing(true)}>关于</Button>
         {userProfile !== undefined && (
           <div className="flex items-center">
@@ -116,7 +116,7 @@ function AppContent({ config, setConfig }: Props) {
           activeKey={currentTabName}
           onChange={(key) => setCurrentTabName(key as CurrentTabName)}
         />
-        <DownloadingPane className="h-full basis-1/2 overflow-auto" config={config} setConfig={setConfig} />
+        <ProgressesPane className="h-full basis-1/2 overflow-auto" config={config} setConfig={setConfig} />
       </div>
 
       <LoginDialog
@@ -125,9 +125,9 @@ function AppContent({ config, setConfig }: Props) {
         config={config}
         setConfig={setConfig}
       />
-      <LogViewer
-        logViewerShowing={logViewerShowing}
-        setLogViewerShowing={setLogViewerShowing}
+      <LogDialog
+        logDialogShowing={logDialogShowing}
+        setLogDialogShowing={setLogDialogShowing}
         config={config}
         setConfig={setConfig}
       />

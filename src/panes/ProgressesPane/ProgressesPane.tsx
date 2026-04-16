@@ -1,11 +1,11 @@
 import { Button, Input, Tabs, TabsProps } from 'antd'
-import { commands, Config, events } from '../bindings.ts'
+import { commands, Config, events } from '../../bindings.ts'
 import { useEffect, useMemo, useState } from 'react'
 import { open } from '@tauri-apps/plugin-dialog'
-import SettingsDialog from '../components/SettingsDialog.tsx'
-import { ProgressData } from '../types.ts'
-import UncompletedProgresses from '../components/UncompletedProgresses.tsx'
-import CompletedProgresses from '../components/CompletedProgresses.tsx'
+import SettingsDialog from '../../dialogs/SettingsDialog.tsx'
+import { ProgressData } from '../../types.ts'
+import UncompletedProgresses from './components/UncompletedProgresses.tsx'
+import CompletedProgresses from './components/CompletedProgresses.tsx'
 
 interface Props {
   className?: string
@@ -13,7 +13,7 @@ interface Props {
   setConfig: (value: Config | undefined | ((prev: Config | undefined) => Config | undefined)) => void
 }
 
-function DownloadingPane({ className, config, setConfig }: Props) {
+function ProgressesPane({ className, config, setConfig }: Props) {
   const [progresses, setProgresses] = useState<Map<number, ProgressData>>(new Map())
   const [downloadSpeed, setDownloadSpeed] = useState<string>()
   const [settingsDialogShowing, setSettingsDialogShowing] = useState<boolean>(false)
@@ -147,4 +147,4 @@ function DownloadingPane({ className, config, setConfig }: Props) {
   )
 }
 
-export default DownloadingPane
+export default ProgressesPane

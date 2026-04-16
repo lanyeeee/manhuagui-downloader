@@ -1,5 +1,5 @@
-import { Comic, commands } from '../bindings.ts'
-import { CurrentTabName } from '../types.ts'
+import { Comic, commands } from '../../../bindings.ts'
+import { CurrentTabName } from '../../../types.ts'
 import { Button, Card } from 'antd'
 import { useMemo } from 'react'
 
