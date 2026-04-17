@@ -8,7 +8,7 @@ interface Props {
   setAboutDialogShowing: (showing: boolean) => void
 }
 
-export function AboutDialog({ aboutDialogShowing, setAboutDialogShowing }: Props) {
+function AboutDialog({ aboutDialogShowing, setAboutDialogShowing }: Props) {
   const [version, setVersion] = useState<string>('')
 
   useEffect(() => {
@@ -16,7 +16,7 @@ export function AboutDialog({ aboutDialogShowing, setAboutDialogShowing }: Props
   }, [])
 
   return (
-    <Modal open={aboutDialogShowing} onCancel={() => setAboutDialogShowing(false)} footer={null}>
+    <Modal open={aboutDialogShowing} onCancel={() => setAboutDialogShowing(false)} footer={null} width={450}>
       <div className="flex flex-col items-center gap-row-6">
         <img src={icon} alt="icon" className="w-32 h-32" />
         <div className="text-center text-gray-400 text-xs">
@@ -65,3 +65,5 @@ export function AboutDialog({ aboutDialogShowing, setAboutDialogShowing }: Props
     </Modal>
   )
 }
+
+export default AboutDialog

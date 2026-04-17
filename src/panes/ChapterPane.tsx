@@ -1,16 +1,4 @@
-import {
-  App as AntdApp,
-  Button,
-  Card,
-  Checkbox,
-  CheckboxProps,
-  Divider,
-  Dropdown,
-  Empty,
-  MenuProps,
-  Tabs,
-  TabsProps,
-} from 'antd'
+import { App as AntdApp, Button, Checkbox, CheckboxProps, Dropdown, Empty, MenuProps, Tabs, TabsProps } from 'antd'
 import { ChapterInfo, Comic, commands } from '../bindings.ts'
 import { useEffect, useMemo, useState } from 'react'
 import SelectionArea, { SelectionEvent } from '@viselect/react'
@@ -56,8 +44,9 @@ function ChapterPane({ pickedComic, setPickedComic }: Props) {
   useEffect(() => {
     setCheckedIds(new Set())
     setSelectedIds(new Set())
+    // FIXME: 需要调用 SelectionArea实例的 clearSelection() 方法
     setCurrentGroupName(firstGroupName)
-  }, [firstGroupName, pickedComic?.id])
+  }, [firstGroupName, pickedComic])
 
   // 下载勾选的章节
   async function downloadChapters() {
@@ -113,42 +102,33 @@ function ChapterPane({ pickedComic, setPickedComic }: Props) {
   }
 
   return (
-    <div className="h-full flex flex-col">
-      <div className="flex flex-justify-around select-none">
-        <span>总章数：{chapterInfos?.length}</span>
-        <Divider type="vertical" />
-        <span>已下载：{chapterInfos?.filter((c) => c.isDownloaded).length}</span>
-        <Divider type="vertical" />
-        <span>已勾选：{checkedIds.size}</span>
-      </div>
-      <div className="flex justify-between select-none">
-        左键拖动进行框选，右键打开菜单
-        <Button className="w-1/6" disabled={pickedComic === undefined} size="small" onClick={reloadPickedComic}>
-          刷新
-        </Button>
-        <Button
-          className="w-1/4"
-          disabled={pickedComic === undefined}
-          type="primary"
-          size="small"
-          onClick={downloadChapters}>
-          下载勾选章节
-        </Button>
-      </div>
-      <ChapterTabs
-        pickedComic={pickedComic}
-        sortedGroups={sortedGroups}
-        setCheckedIds={setCheckedIds}
-        selectedIds={selectedIds}
-        setSelectedIds={setSelectedIds}
-        checkedIds={checkedIds}
-        currentGroupName={currentGroupName}
-        setCurrentGroupName={setCurrentGroupName}
-      />
+    <div className="h-full flex flex-col box-border">
+      {pickedComic === undefined && <Empty description="请先选择漫画(漫画搜索、漫画收藏、本地库存)" />}
       {pickedComic !== undefined && (
-        <Card className="cursor-auto m-0! rounded-none" styles={{ body: { padding: '0.25rem' } }}>
-          <div className="flex">
-            <img className="w-24" src={pickedComic.cover} alt="" />
+        <>
+          <div className="flex items-center select-none pt-2 gap-1 px-2">
+            <div>左键拖动进行框选，右键打开菜单</div>
+            <Button className="w-13 ml-auto" onClick={reloadPickedComic}>
+              刷新
+            </Button>
+            <Button className="w-27" type="primary" onClick={downloadChapters}>
+              下载勾选章节
+            </Button>
+          </div>
+
+          <ChapterTabs
+            pickedComic={pickedComic}
+            sortedGroups={sortedGroups}
+            setCheckedIds={setCheckedIds}
+            selectedIds={selectedIds}
+            setSelectedIds={setSelectedIds}
+            checkedIds={checkedIds}
+            currentGroupName={currentGroupName}
+            setCurrentGroupName={setCurrentGroupName}
+          />
+
+          <div className="flex p-2 pt-0">
+            <img className="w-24 mr-4 object-cover" src={pickedComic.cover} alt="" />
             <div className="flex flex-col h-full">
               <span className="font-bold text-xl line-clamp-3">
                 {pickedComic.title}
@@ -158,14 +138,14 @@ function ChapterPane({ pickedComic, setPickedComic }: Props) {
               <span className="text-gray">类型：{pickedComic.genres.join(' ')}</span>
             </div>
           </div>
-        </Card>
+        </>
       )}
     </div>
   )
 }
 
 interface ChapterTabsProps {
-  pickedComic: Comic | undefined
+  pickedComic: Comic
   sortedGroups?: [string, ChapterInfo[]][]
   setCheckedIds: (value: ((prevState: Set<number>) => Set<number>) | Set<number>) => void
   selectedIds: Set<number>
@@ -186,7 +166,7 @@ function ChapterTabs({
   setCurrentGroupName,
 }: ChapterTabsProps) {
   // 当前分组
-  const currentGroup = pickedComic?.groups[currentGroupName]
+  const currentGroup = pickedComic.groups[currentGroupName]
 
   const items = useMemo<TabsProps['items']>(() => {
     // 提取章节id
@@ -219,7 +199,6 @@ function ChapterTabs({
         const next = new Set(prev)
         extractIds(added).forEach((id) => next.add(id))
         extractIds(removed).forEach((id) => next.delete(id))
-        console.log(`added: ${extractIds(added)}, removed: ${extractIds(removed)}`)
         return next
       })
     }
@@ -289,7 +268,7 @@ function ChapterTabs({
         <Dropdown menu={{ items: dropdownOptions }} trigger={['contextMenu']}>
           <div className="h-full flex flex-col gap-row-1 overflow-auto">
             <SelectionArea
-              className={`${styles.selectionContainer} h-full`}
+              className={`${styles.selectionContainer} flex flex-col flex-1 box-border pt-2 px-2 overflow-auto h-full`}
               selectables=".selectable"
               features={{ deselectOnBlur: true }}
               onMove={updateSelectedIds}
@@ -317,10 +296,6 @@ function ChapterTabs({
       ),
     }))
   }, [sortedGroups, setSelectedIds, setCheckedIds, selectedIds, currentGroup, checkedIds])
-
-  if (pickedComic === undefined) {
-    return <Empty description="请先进行漫画搜索" />
-  }
 
   return (
     <Tabs

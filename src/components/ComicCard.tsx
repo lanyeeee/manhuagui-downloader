@@ -33,14 +33,14 @@ function ComicCard({
       console.error(result.error)
       return
     }
-    console.log(result.data)
+
     setPickedComic(result.data)
     setCurrentTabName('chapter')
   }
 
   return (
-    <Card hoverable={true} className="cursor-auto m-0! rounded-none" styles={{ body: { padding: '0.25rem' } }}>
-      <div className="flex">
+    <Card hoverable={true} className="cursor-auto m-0!" styles={{ body: { padding: '0.25rem' } }}>
+      <div className="flex h-full">
         <img
           className="w-24 object-cover mr-4 cursor-pointer transition-transform duration-200 hover:scale-106"
           src={comicCover}

@@ -1,10 +1,11 @@
 import { Comic, commands, Config, events } from '../../bindings.ts'
 import { CurrentTabName } from '../../types.ts'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { App as AntdApp, Button, Input, Pagination } from 'antd'
+import { App as AntdApp, Button, Input, Pagination, Space } from 'antd'
 import DownloadedComicCard from './components/DownloadedComicCard.tsx'
 import { MessageInstance } from 'antd/es/message/interface'
 import { open } from '@tauri-apps/plugin-dialog'
+import { FolderOpenIcon } from '@phosphor-icons/react'
 
 interface ProgressData {
   comicTitle: string
@@ -234,15 +235,19 @@ function DownloadedPane({ config, setConfig, setPickedComic, currentTabName, set
 
   return (
     <div className="h-full flex flex-col overflow-auto">
-      <div className="flex gap-col-1">
-        <Input value={config.exportDir} prefix="导出目录" size="small" readOnly onClick={selectExportDir} />
-        <Button size="small" onClick={showExportDirInFileManager}>
-          打开目录
-        </Button>
-        <Button size="small" onClick={updateDownloadedComics}>
-          更新库存
-        </Button>
+      <div className="flex gap-1 box-border px-2 pt-2">
+        <Space.Compact className="whitespace-nowrap">
+          <Space.Addon>导出目录</Space.Addon>
+          <Input value={config.exportDir} readOnly onClick={selectExportDir} />
+          <Button
+            className="w-10!"
+            icon={<FolderOpenIcon size={20} className="mt-2px" />}
+            onClick={showExportDirInFileManager}
+          />
+        </Space.Compact>
+        <Button onClick={updateDownloadedComics}>更新库存</Button>
       </div>
+
       <div className="h-full flex flex-col gap-row-1 overflow-auto">
         <div className="h-full flex flex-col gap-row-2 overflow-auto p-2">
           {showingDownloadedComics.map((comic) => (
@@ -254,7 +259,9 @@ function DownloadedPane({ config, setConfig, setPickedComic, currentTabName, set
             />
           ))}
         </div>
+
         <Pagination
+          className="p-2 mt-auto"
           current={downloadedPageNum}
           pageSize={20}
           total={downloadedComics.length}

@@ -21,9 +21,7 @@ function FavoritePane({ userProfile, setPickedComic, setCurrentTabName }: Props)
       console.error(result.error)
       return
     }
-    console.log('getFavourite')
     setGetFavoriteResult(result.data)
-    console.log(result.data)
   }, [])
 
   useEffect(() => {
@@ -49,6 +47,7 @@ function FavoritePane({ userProfile, setPickedComic, setCurrentTabName }: Props)
             ))}
           </div>
           <Pagination
+            className="p-2 mt-auto"
             current={favoritePageNum}
             pageSize={20}
             total={getFavoriteResult.total}

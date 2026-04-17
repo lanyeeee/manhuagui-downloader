@@ -1,6 +1,7 @@
-import { App as AntdApp, Input, Modal } from 'antd'
+import { App as AntdApp, Modal } from 'antd'
 import { commands, Config } from '../bindings.ts'
 import { KeyboardEvent, useState } from 'react'
+import { FloatLabelInput } from '../components/FloatLabelInput.tsx'
 
 interface Props {
   loginDialogShowing: boolean
@@ -54,9 +55,9 @@ function LoginDialog({ loginDialogShowing, setLoginDialogShowing, config, setCon
       onCancel={() => setLoginDialogShowing(false)}
       cancelButtonProps={{ style: { display: 'none' } }}
       okText="登录">
-      <div className="flex flex-col" onKeyDown={handleKeyDown}>
-        <Input prefix="用户名:" value={username} onChange={(e) => setUsername(e.target.value)} />
-        <Input.Password prefix="密码:" value={password} onChange={(e) => setPassword(e.target.value)} />
+      <div className="flex flex-col gap-2" onKeyDown={handleKeyDown}>
+        <FloatLabelInput label="用户名" value={username} onChange={(e) => setUsername(e.target.value)} />
+        <FloatLabelInput type="password" label="密码" value={password} onChange={(e) => setPassword(e.target.value)} />
       </div>
     </Modal>
   )

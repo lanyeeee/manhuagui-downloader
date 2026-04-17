@@ -1,22 +1,20 @@
-import { Button, Input, Tabs, TabsProps } from 'antd'
+import { Button, Input, Space, Tabs, TabsProps } from 'antd'
 import { commands, Config, events } from '../../bindings.ts'
 import { useEffect, useMemo, useState } from 'react'
 import { open } from '@tauri-apps/plugin-dialog'
-import SettingsDialog from '../../dialogs/SettingsDialog.tsx'
 import { ProgressData } from '../../types.ts'
 import UncompletedProgresses from './components/UncompletedProgresses.tsx'
 import CompletedProgresses from './components/CompletedProgresses.tsx'
+import { FolderOpenIcon } from '@phosphor-icons/react'
 
 interface Props {
-  className?: string
   config: Config
   setConfig: (value: Config | undefined | ((prev: Config | undefined) => Config | undefined)) => void
 }
 
-function ProgressesPane({ className, config, setConfig }: Props) {
+function ProgressesPane({ config, setConfig }: Props) {
   const [progresses, setProgresses] = useState<Map<number, ProgressData>>(new Map())
   const [downloadSpeed, setDownloadSpeed] = useState<string>()
-  const [settingsDialogShowing, setSettingsDialogShowing] = useState<boolean>(false)
 
   useEffect(() => {
     let mounted = true
@@ -124,25 +122,26 @@ function ProgressesPane({ className, config, setConfig }: Props) {
   )
 
   return (
-    <div className={`h-full flex flex-col ${className}`}>
-      <span className="h-11 text-lg font-bold">下载列表</span>
-      <div className="flex gap-col-1">
-        <Input value={config.downloadDir} prefix="下载目录" size="small" readOnly onClick={selectDownloadDir} />
-        <Button size="small" onClick={showDownloadDirInFileManager}>
-          打开目录
-        </Button>
-        <Button size="small" onClick={() => setSettingsDialogShowing(true)}>
-          更多设置
-        </Button>
-        <SettingsDialog
-          settingsDialogShowing={settingsDialogShowing}
-          setSettingsDialogShowing={setSettingsDialogShowing}
-          config={config}
-          setConfig={setConfig}
+    <div className="flex flex-col h-full overflow-auto">
+      <Space.Compact className="box-border px-2 pt-2 whitespace-nowrap">
+        <Space.Addon>下载目录</Space.Addon>
+        <Input value={config.downloadDir} className="flex-grow" readOnly onClick={selectDownloadDir} />
+        <Button
+          className="w-10!"
+          icon={<FolderOpenIcon size={20} className="mt-2px" />}
+          onClick={showDownloadDirInFileManager}
         />
-      </div>
-      <span>下载速度: {downloadSpeed}</span>
-      <Tabs size="small" className="overflow-auto h-full" items={tabItems} />
+      </Space.Compact>
+
+      <Tabs
+        animated
+        size="small"
+        className="overflow-auto h-full"
+        items={tabItems}
+        tabBarExtraContent={{
+          right: <span className="whitespace-nowrap text-ellipsis overflow-hidden">下载速度: {downloadSpeed}</span>,
+        }}
+      />
     </div>
   )
 }

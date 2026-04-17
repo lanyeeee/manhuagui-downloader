@@ -27,3 +27,11 @@ body {
 .selection-area {
     @apply bg-[rgba(46,115,252,0.5)];
 }
+
+.ant-tabs-nav {
+    @apply px-2;
+}
+
+.ant-tabs-nav::before {
+    @apply mx-2
+}

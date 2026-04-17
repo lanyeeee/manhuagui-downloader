@@ -1,9 +1,10 @@
 import { Comic, commands, SearchResult } from '../bindings.ts'
 import { CurrentTabName } from '../types.ts'
 import { useState } from 'react'
-import { App as AntdApp, Button, Input, Pagination } from 'antd'
+import { App as AntdApp, Button, Pagination, Space } from 'antd'
 import ComicCard from '../components/ComicCard.tsx'
-import isNumeric from 'antd/es/_util/isNumeric'
+import { FloatLabelInput } from '../components/FloatLabelInput.tsx'
+import { ArrowRightIcon, MagnifyingGlassIcon } from '@phosphor-icons/react'
 
 interface Props {
   setPickedComic: (comic: Comic | undefined) => void
@@ -17,23 +18,28 @@ function SearchPane({ setPickedComic, setCurrentTabName }: Props) {
   const [comicIdInput, setComicIdInput] = useState<string>('')
   const [searchPageNum, setSearchPageNum] = useState<number>(1)
   const [searchResult, setSearchResult] = useState<SearchResult>()
+  const [searching, setSearching] = useState<boolean>(false)
+  const [picking, setPicking] = useState<boolean>(false)
 
   async function search(keyword: string, pageNum: number) {
-    console.log(keyword, pageNum)
     setSearchPageNum(pageNum)
+    setSearching(true)
+
     const result = await commands.search(keyword, pageNum)
     if (result.status === 'error') {
       console.error(result.error)
       return
     }
+
     setSearchResult(result.data)
-    console.log(result.data)
+    setSearching(false)
   }
 
   function getComicIdFromComicIdInput(): number | undefined {
     const comicIdString = comicIdInput.trim()
-    if (isNumeric(comicIdString)) {
-      return parseInt(comicIdString)
+    const comicId = parseInt(comicIdString)
+    if (!isNaN(comicId)) {
+      return comicId
     }
 
     const regex = /\/comic\/(\d+)/
@@ -52,71 +58,83 @@ function SearchPane({ setPickedComic, setCurrentTabName }: Props) {
       return
     }
 
+    setPicking(true)
+
     const result = await commands.getComic(comicId)
     if (result.status === 'error') {
       console.error(result.error)
       return
     }
-    console.log(result.data)
+
+    setPicking(false)
+
     setPickedComic(result.data)
     setCurrentTabName('chapter')
   }
 
   return (
     <div className="h-full flex flex-col">
-      <div className="flex flex-col">
-        <div className="flex">
-          <Input
-            prefix="关键词:"
-            size="small"
-            allowClear
-            value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
-            onKeyDown={async (e) => {
-              if (e.key === 'Enter') await search(searchInput.trim(), 1)
-            }}
-          />
-          <Button size="small" onClick={() => search(searchInput.trim(), 1)}>
-            搜索
-          </Button>
-        </div>
-        <div className="flex">
-          <Input
-            prefix="漫画ID:"
-            size="small"
-            placeholder="链接也行"
-            allowClear
-            value={comicIdInput}
-            onChange={(e) => setComicIdInput(e.target.value)}
-            onKeyDown={async (e) => {
-              if (e.key === 'Enter') await pickComic()
-            }}
-          />
-          <Button size="small" onClick={() => pickComic()}>
-            直达
-          </Button>
-        </div>
-      </div>
+      <Space.Compact className="box-border px-2 pt-2">
+        <FloatLabelInput
+          label="关键词"
+          allowClear
+          value={searchInput}
+          onChange={(e) => setSearchInput(e.target.value)}
+          onKeyDown={async (e) => {
+            if (e.key === 'Enter') await search(searchInput.trim(), 1)
+          }}
+        />
+        <Button
+          loading={searching}
+          type="primary"
+          className="w-15%!"
+          icon={<MagnifyingGlassIcon size={22} className="mt-2px" />}
+          onClick={() => search(searchInput.trim(), 1)}
+        />
+      </Space.Compact>
+
+      <Space.Compact className="box-border px-2 pt-1.5">
+        <FloatLabelInput
+          label="漫画ID (链接也行)"
+          allowClear
+          value={comicIdInput}
+          onChange={(e) => setComicIdInput(e.target.value)}
+          onKeyDown={async (e) => {
+            if (e.key === 'Enter') await pickComic()
+          }}
+        />
+        <Button
+          loading={picking}
+          type="primary"
+          className="w-15%!"
+          icon={<ArrowRightIcon size={22} className="mt-2px" />}
+          onClick={() => pickComic()}
+        />
+      </Space.Compact>
 
       {searchResult && (
-        <div className="h-full flex flex-col gap-row-1 overflow-auto">
-          <div className="h-full flex flex-col gap-row-2 overflow-auto p-2">
-            {searchResult.comics.map((comic) => (
-              <ComicCard
-                key={comic.id}
-                comicId={comic.id}
-                comicTitle={comic.title}
-                comicCover={comic.cover}
-                comicSubtitle={comic.subtitle}
-                comicAuthors={comic.authors}
-                comicGenres={comic.genres}
-                comicLastUpdateTime={comic.updateTime}
-                setPickedComic={setPickedComic}
-                setCurrentTabName={setCurrentTabName}
-              />
-            ))}
+        <>
+          <div className="flex flex-col overflow-auto">
+            <div className="flex flex-col gap-row-2 overflow-auto p-2">
+              {searchResult.comics.map((comic) => (
+                <ComicCard
+                  key={comic.id}
+                  comicId={comic.id}
+                  comicTitle={comic.title}
+                  comicCover={comic.cover}
+                  comicSubtitle={comic.subtitle}
+                  comicAuthors={comic.authors}
+                  comicGenres={comic.genres}
+                  comicLastUpdateTime={comic.updateTime}
+                  setPickedComic={setPickedComic}
+                  setCurrentTabName={setCurrentTabName}
+                />
+              ))}
+            </div>
           </div>
+
           <Pagination
+            className="p-2 mt-auto"
             current={searchPageNum}
             pageSize={10}
             total={searchResult.total}
@@ -124,7 +142,7 @@ function SearchPane({ setPickedComic, setCurrentTabName }: Props) {
             simple
             onChange={(pageNum) => search(searchInput.trim(), pageNum)}
           />
-        </div>
+        </>
       )}
     </div>
   )

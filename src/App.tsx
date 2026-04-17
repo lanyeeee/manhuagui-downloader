@@ -23,9 +23,17 @@ function App() {
 
 // eslint-disable-next-line react/display-name
 export default () => (
-  <AntdApp notification={{ placement: 'bottomRight', showProgress: true, maxCount: 3 }}>
-    <ConfigProvider locale={zhCN}>
+  <ConfigProvider
+    locale={zhCN}
+    theme={{
+      token: {
+        fontFamily:
+          "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji'",
+      },
+      components: { Button: { iconGap: '4px' } },
+    }}>
+    <AntdApp notification={{ placement: 'bottomRight', showProgress: true, maxCount: 3 }}>
       <App />
-    </ConfigProvider>
-  </AntdApp>
+    </AntdApp>
+  </ConfigProvider>
 )

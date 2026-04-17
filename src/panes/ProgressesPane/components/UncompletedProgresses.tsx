@@ -1,18 +1,18 @@
 import { ProgressData } from '../../../types.ts'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import {
-  CheckOutlined,
-  ClockCircleOutlined,
-  DeleteOutlined,
-  ExclamationCircleOutlined,
-  LoadingOutlined,
-  PauseOutlined,
-  RightOutlined,
-} from '@ant-design/icons'
-import { commands, DownloadTaskState } from '../../../bindings.ts'
+import { ChapterInfo, commands, DownloadTaskState } from '../../../bindings.ts'
 import SelectionArea, { SelectionEvent, useSelection } from '@viselect/react'
 import { Dropdown, MenuProps, Progress } from 'antd'
 import styles from '../../../styles/UncompletedProgresses.module.css'
+import {
+  CaretRightIcon,
+  ChecksIcon,
+  ClockIcon,
+  CloudArrowDownIcon,
+  PauseIcon,
+  TrashIcon,
+  WarningCircleIcon,
+} from '@phosphor-icons/react'
 
 interface Props {
   progresses: Map<number, ProgressData>
@@ -21,13 +21,6 @@ interface Props {
 function UncompletedProgresses({ progresses }: Props) {
   // 已框选选到的下载任务的章节id
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
-
-  function extractIds(elements: Element[]): number[] {
-    return elements
-      .map((element) => element.getAttribute('data-key'))
-      .filter(Boolean)
-      .map(Number)
-  }
 
   function updateSelectedIds({
     store: {
@@ -38,7 +31,6 @@ function UncompletedProgresses({ progresses }: Props) {
       const next = new Set(prev)
       extractIds(added).forEach((id) => next.add(id))
       extractIds(removed).forEach((id) => next.delete(id))
-      console.log(`added: ${added}, removed: ${removed}`)
       return next
     })
   }
@@ -120,7 +112,7 @@ function Progresses({ progresses, selectedIds, setSelectedIds }: ProgressesProps
     {
       label: '全选',
       key: 'check all',
-      icon: <CheckOutlined />,
+      icon: <ChecksIcon size={20} />,
       onClick: () => {
         if (selection === undefined) {
           return
@@ -132,7 +124,7 @@ function Progresses({ progresses, selectedIds, setSelectedIds }: ProgressesProps
     {
       label: '继续',
       key: 'resume',
-      icon: <RightOutlined />,
+      icon: <CaretRightIcon size={20} />,
       onClick: () => {
         selectedIds.forEach(async (chapterId) => {
           const result = await commands.resumeDownloadTask(chapterId)
@@ -145,10 +137,9 @@ function Progresses({ progresses, selectedIds, setSelectedIds }: ProgressesProps
     {
       label: '暂停',
       key: 'pause',
-      icon: <PauseOutlined />,
+      icon: <PauseIcon size={20} />,
       onClick: () => {
         selectedIds.forEach(async (chapterId) => {
-          console.log('pause', chapterId)
           const result = await commands.pauseDownloadTask(chapterId)
           if (result.status === 'error') {
             console.error(result.error)
@@ -159,10 +150,9 @@ function Progresses({ progresses, selectedIds, setSelectedIds }: ProgressesProps
     {
       label: '取消',
       key: 'cancel',
-      icon: <DeleteOutlined />,
+      icon: <TrashIcon size={20} />,
       onClick: () => {
         selectedIds.forEach(async (chapterId) => {
-          console.log('cancel', chapterId)
           const result = await commands.cancelDownloadTask(chapterId)
           if (result.status === 'error') {
             console.error(result.error)
@@ -175,15 +165,20 @@ function Progresses({ progresses, selectedIds, setSelectedIds }: ProgressesProps
   return (
     <Dropdown className="select-none" menu={{ items: dropdownOptions }} trigger={['contextMenu']}>
       <div className="h-full select-none">
-        {uncompletedProgresses.map(([chapterId, progressData], index) => (
+        {uncompletedProgresses.map(([chapterId, { state, chapterInfo, percentage, indicator }], index) => (
           <div
             ref={(el) => (selectableRefs.current[index] = el)}
             className={`selectable p-3 mb-2 rounded-lg ${selectedIds.has(chapterId) ? 'selected shadow-md' : 'hover:bg-gray-1'}`}
             key={chapterId}
             data-key={chapterId}
-            onDoubleClick={() => onProgressDoubleClick(progressData.state, chapterId)}
+            onDoubleClick={() => onProgressDoubleClick(state, chapterId)}
             onContextMenu={() => onProgressContextMenu(chapterId)}>
-            <DownloadingProgresses progressData={progressData} />
+            <DownloadingProgresses
+              percentage={percentage}
+              state={state}
+              chapterInfo={chapterInfo}
+              indicator={indicator}
+            />
           </div>
         ))}
       </div>
@@ -191,90 +186,107 @@ function Progresses({ progresses, selectedIds, setSelectedIds }: ProgressesProps
   )
 }
 
-function DownloadingProgresses({ progressData }: { progressData: ProgressData }) {
-  function stateToStatus(state: DownloadTaskState): 'normal' | 'exception' | 'active' | 'success' {
-    if (state === 'Downloading') {
-      return 'active'
-    } else if (state === 'Completed') {
-      return 'success'
-    } else if (state === 'Failed') {
-      return 'exception'
-    } else {
-      return 'normal'
-    }
-  }
+function extractIds(elements: Element[]): number[] {
+  return elements
+    .map((element) => element.getAttribute('data-key'))
+    .filter(Boolean)
+    .map(Number)
+}
 
-  function stateToColorClass(state: DownloadTaskState) {
-    if (state === 'Downloading') {
-      return 'text-blue-500'
-    } else if (state === 'Pending') {
-      return 'text-gray-500'
-    } else if (state === 'Paused') {
-      return 'text-yellow-500'
-    } else if (state === 'Failed') {
-      return 'text-red-500'
-    } else if (state === 'Completed') {
-      return 'text-green-500'
-    } else if (state === 'Cancelled') {
-      return 'text-stone-500'
-    }
-
-    return ''
-  }
-
-  function stateToColorHex(state: DownloadTaskState) {
-    if (state === 'Downloading') {
-      return '#2B7FFF'
-    } else if (state === 'Pending') {
-      return '#6A7282'
-    } else if (state === 'Paused') {
-      return '#F0B100'
-    } else if (state === 'Failed') {
-      return '#FB2C36'
-    } else if (state === 'Completed') {
-      return '#00C950'
-    } else if (state === 'Cancelled') {
-      return '#79716B'
-    }
-
-    return ''
-  }
-
-  const started = !isNaN(progressData.percentage)
-  const color = stateToColorHex(progressData.state)
-  const colorClass = stateToColorClass(progressData.state)
+function DownloadingProgresses({
+  percentage,
+  state,
+  chapterInfo,
+  indicator,
+}: {
+  percentage: number
+  state: DownloadTaskState
+  chapterInfo: ChapterInfo
+  indicator: string
+}) {
+  const started = !isNaN(percentage)
+  const color = stateToColorHex(state)
+  const colorClass = stateToColorClass(state)
 
   return (
     <>
       <div className="grid grid-cols-[1fr_1fr_1fr]">
-        <div className="text-ellipsis whitespace-nowrap overflow-hidden" title={progressData.chapterInfo.comicTitle}>
-          {progressData.chapterInfo.comicTitle}
+        <div className="text-ellipsis whitespace-nowrap overflow-hidden" title={chapterInfo.comicTitle}>
+          {chapterInfo.comicTitle}
         </div>
-        <div className="text-ellipsis whitespace-nowrap overflow-hidden" title={progressData.chapterInfo.groupName}>
-          {progressData.chapterInfo.groupName}
+        <div className="text-ellipsis whitespace-nowrap overflow-hidden" title={chapterInfo.groupName}>
+          {chapterInfo.groupName}
         </div>
-        <div className="text-ellipsis whitespace-nowrap overflow-hidden" title={progressData.chapterInfo.chapterTitle}>
-          {progressData.chapterInfo.chapterTitle}
+        <div className="text-ellipsis whitespace-nowrap overflow-hidden" title={chapterInfo.chapterTitle}>
+          {chapterInfo.chapterTitle}
         </div>
       </div>
       <div className={`flex ${colorClass}`}>
-        {progressData.state === 'Downloading' && <LoadingOutlined />}
-        {progressData.state === 'Pending' && <ClockCircleOutlined />}
-        {progressData.state === 'Paused' && <PauseOutlined />}
-        {progressData.state === 'Failed' && <ExclamationCircleOutlined />}
-        {!started && <div className="ml-auto">{progressData.indicator}</div>}
+        {state === 'Downloading' && <CloudArrowDownIcon size={20} />}
+        {state === 'Pending' && <ClockIcon size={20} />}
+        {state === 'Paused' && <PauseIcon size={20} />}
+        {state === 'Failed' && <WarningCircleIcon size={20} />}
+        {!started && <div className="ml-auto whitespace-nowrap">{indicator}</div>}
         {started && (
           <Progress
             className="ml-2"
             strokeColor={color}
-            status={stateToStatus(progressData.state)}
-            percent={progressData.percentage}
-            format={() => <div className={colorClass}>{progressData.indicator}</div>}
+            status={stateToStatus(state)}
+            percent={percentage}
+            format={() => <div className={colorClass}>{indicator}</div>}
           />
         )}
       </div>
     </>
   )
+}
+
+function stateToStatus(state: DownloadTaskState): 'normal' | 'exception' | 'active' | 'success' {
+  if (state === 'Downloading') {
+    return 'active'
+  } else if (state === 'Completed') {
+    return 'success'
+  } else if (state === 'Failed') {
+    return 'exception'
+  } else {
+    return 'normal'
+  }
+}
+
+function stateToColorHex(state: DownloadTaskState) {
+  if (state === 'Downloading') {
+    return '#2B7FFF'
+  } else if (state === 'Pending') {
+    return '#6A7282'
+  } else if (state === 'Paused') {
+    return '#F0B100'
+  } else if (state === 'Failed') {
+    return '#FB2C36'
+  } else if (state === 'Completed') {
+    return '#00C950'
+  } else if (state === 'Cancelled') {
+    return '#79716B'
+  }
+
+  return ''
+}
+
+function stateToColorClass(state: DownloadTaskState) {
+  if (state === 'Downloading') {
+    return 'text-blue-500'
+  } else if (state === 'Pending') {
+    return 'text-gray-500'
+  } else if (state === 'Paused') {
+    return 'text-yellow-500'
+  } else if (state === 'Failed') {
+    return 'text-red-500'
+  } else if (state === 'Completed') {
+    return 'text-green-500'
+  } else if (state === 'Cancelled') {
+    return 'text-stone-500'
+  }
+
+  return ''
 }
 
 export default UncompletedProgresses

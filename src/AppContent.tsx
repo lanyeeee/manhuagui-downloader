@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Comic, commands, Config, UserProfile } from './bindings.ts'
-import { App as AntdApp, Avatar, Button, Input, Tabs, TabsProps } from 'antd'
+import { App as AntdApp, Avatar, Button, Input, Tabs, TabsProps, Space } from 'antd'
 import LoginDialog from './dialogs/LoginDialog.tsx'
 import ProgressesPane from './panes/ProgressesPane/ProgressesPane.tsx'
 import { CurrentTabName } from './types.ts'
@@ -9,7 +9,9 @@ import ChapterPane from './panes/ChapterPane.tsx'
 import FavoritePane from './panes/FavoritePane.tsx'
 import DownloadedPane from './panes/DownloadedPane/DownloadedPane.tsx'
 import LogDialog from './dialogs/LogDialog.tsx'
-import { AboutDialog } from './dialogs/AboutDialog.tsx'
+import AboutDialog from './dialogs/AboutDialog.tsx'
+import SettingsDialog from './dialogs/SettingsDialog.tsx'
+import { ClockCounterClockwiseIcon, GearSixIcon, InfoIcon, UserIcon } from '@phosphor-icons/react'
 
 interface Props {
   config: Config
@@ -23,6 +25,7 @@ function AppContent({ config, setConfig }: Props) {
   const [loginDialogShowing, setLoginDialogShowing] = useState<boolean>(false)
   const [logDialogShowing, setLogDialogShowing] = useState<boolean>(false)
   const [aboutDialogShowing, setAboutDialogShowing] = useState<boolean>(false)
+  const [settingsDialogShowing, setSettingsDialogShowing] = useState<boolean>(false)
   const [pickedComic, setPickedComic] = useState<Comic>()
 
   useEffect(() => {
@@ -89,18 +92,19 @@ function AppContent({ config, setConfig }: Props) {
 
   return (
     <div className="h-screen flex flex-col">
-      <div className="flex">
-        <Input
-          prefix="Cookie："
-          value={config.cookie}
-          onChange={(e) => setConfig({ ...config, cookie: e.target.value })}
-          allowClear={true}
-        />
-        <Button type="primary" onClick={() => setLoginDialogShowing(true)}>
-          账号登录
-        </Button>
-        <Button onClick={() => setLogDialogShowing(true)}>查看日志</Button>
-        <Button onClick={() => setAboutDialogShowing(true)}>关于</Button>
+      <div className="flex gap-1 pt-2 px-2">
+        <Space.Compact className="w-full">
+          <Space.Addon>Cookie</Space.Addon>
+          <Input
+            value={config.cookie}
+            onChange={(e) => setConfig({ ...config, cookie: e.target.value })}
+            allowClear={true}
+          />
+          <Button icon={<UserIcon size={20} />} type="primary" onClick={() => setLoginDialogShowing(true)}>
+            登录
+          </Button>
+        </Space.Compact>
+
         {userProfile !== undefined && (
           <div className="flex items-center">
             <Avatar src={userProfile.avatar} />
@@ -108,15 +112,35 @@ function AppContent({ config, setConfig }: Props) {
           </div>
         )}
       </div>
+
       <div className="flex flex-1 overflow-hidden">
         <Tabs
+          animated
           size="small"
           items={tabItems}
-          className="h-full basis-1/2"
+          className="h-full w-1/2"
           activeKey={currentTabName}
           onChange={(key) => setCurrentTabName(key as CurrentTabName)}
         />
-        <ProgressesPane className="h-full basis-1/2 overflow-auto" config={config} setConfig={setConfig} />
+
+        <div className="w-1/2 overflow-auto flex flex-col">
+          <div className="flex min-h-9.5 gap-col-1 mx-2 items-center border-solid border-0 border-b box-border border-[rgb(239,239,245)]">
+            <div className="text-xl font-bold">下载列表</div>
+            <Button
+              icon={<ClockCounterClockwiseIcon size={20} className="mt-2px" />}
+              className="ml-auto"
+              onClick={() => setLogDialogShowing(true)}>
+              日志
+            </Button>
+            <Button icon={<GearSixIcon size={20} className="mt-2px" />} onClick={() => setSettingsDialogShowing(true)}>
+              配置
+            </Button>
+            <Button icon={<InfoIcon size={20} className="mt-2px" />} onClick={() => setAboutDialogShowing(true)}>
+              关于
+            </Button>
+          </div>
+          <ProgressesPane config={config} setConfig={setConfig} />
+        </div>
       </div>
 
       <LoginDialog
@@ -131,7 +155,12 @@ function AppContent({ config, setConfig }: Props) {
         config={config}
         setConfig={setConfig}
       />
-
+      <SettingsDialog
+        settingsDialogShowing={settingsDialogShowing}
+        setSettingsDialogShowing={setSettingsDialogShowing}
+        config={config}
+        setConfig={setConfig}
+      />
       <AboutDialog aboutDialogShowing={aboutDialogShowing} setAboutDialogShowing={setAboutDialogShowing} />
     </div>
   )

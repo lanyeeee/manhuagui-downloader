@@ -54,7 +54,7 @@ function DownloadedComicCard({ comic, setPickedComic, setCurrentTabName }: Props
   }
 
   return (
-    <Card hoverable={true} className="cursor-auto m-0! rounded-none" styles={{ body: { padding: '0.25rem' } }}>
+    <Card hoverable={true} className="cursor-auto m-0!" styles={{ body: { padding: '0.25rem' } }}>
       <div className="flex">
         <img
           className="w-24 object-cover mr-4 cursor-pointer transition-transform duration-200 hover:scale-106"
