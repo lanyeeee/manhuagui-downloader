@@ -269,7 +269,8 @@ impl DownloadTask {
             comic_title,
             group_name,
             chapter_title,
-            "重命名临时下载目录`{temp_download_dir:?}`成功"
+            "重命名临时下载目录`{}`成功",
+            temp_download_dir.display()
         );
         // 章节下载成功
         tracing::info!(
@@ -442,7 +443,10 @@ impl DownloadTask {
             .join(format!(".下载中-{prefixed_chapter_title}")); // 以 `.下载中-` 开头，表示是临时目录
 
         if let Err(err) = std::fs::create_dir_all(&temp_download_dir).map_err(anyhow::Error::from) {
-            let err_title = format!("`{comic_title} - {group_name} - {chapter_title}`创建目录`{temp_download_dir:?}`失败");
+            let err_title = format!(
+                "`{comic_title} - {group_name} - {chapter_title}`创建目录`{}`失败",
+                temp_download_dir.display()
+            );
             let string_chain = err.to_string_chain();
             tracing::error!(err_title, message = string_chain);
 
@@ -456,25 +460,28 @@ impl DownloadTask {
             comic_title,
             group_name,
             chapter_title,
-            "创建临时下载目录`{temp_download_dir:?}`成功",
+            "创建临时下载目录`{}`成功",
+            temp_download_dir.display()
         );
         Some(temp_download_dir)
     }
 
     fn rename_temp_download_dir(&self, temp_download_dir: &Path) -> anyhow::Result<()> {
         let Some(parent) = temp_download_dir.parent() else {
-            return Err(anyhow!("无法获取`{temp_download_dir:?}`的父目录"));
+            return Err(anyhow!("无法获取`{}`的父目录", temp_download_dir.display()));
         };
 
         let download_dir = parent.join(&self.chapter_info.prefixed_chapter_title);
 
         if download_dir.exists() {
             std::fs::remove_dir_all(&download_dir)
-                .context(format!("删除目录`{download_dir:?}`失败"))?;
+                .context(format!("删除目录`{}`失败", download_dir.display()))?;
         }
 
         std::fs::rename(temp_download_dir, &download_dir).context(format!(
-            "将`{temp_download_dir:?}`重命名为`{download_dir:?}`失败"
+            "将`{}`重命名为`{}`失败",
+            temp_download_dir.display(),
+            download_dir.display()
         ))?;
 
         Ok(())
@@ -616,12 +623,12 @@ impl DownloadImgTask {
         );
         // 保存图片
         if let Err(err) = std::fs::write(save_path, &img_data).map_err(anyhow::Error::from) {
-            let err_title = format!("保存图片`{save_path:?}`失败");
+            let err_title = format!("保存图片`{}`失败", save_path.display());
             let string_chain = err.to_string_chain();
             tracing::error!(err_title, message = string_chain);
             return;
         }
-        tracing::trace!(chapter_id, url, "图片成功保存到`{save_path:?}`");
+        tracing::trace!(chapter_id, url, "图片成功保存到`{}`", save_path.display());
         // 记录下载字节数
         self.download_manager
             .byte_per_sec

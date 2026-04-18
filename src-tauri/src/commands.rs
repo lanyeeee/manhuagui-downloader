@@ -171,11 +171,11 @@ pub fn save_metadata(config: State<RwLock<Config>>, mut comic: Comic) -> Command
     let metadata_path = metadata_dir.join("元数据.json");
 
     std::fs::create_dir_all(&metadata_dir)
-        .context(format!("创建目录`{metadata_dir:?}`失败"))
+        .context(format!("创建目录`{}`失败", metadata_dir.display()))
         .map_err(|err| CommandError::from(&format!("`{comic_title}`的元数据保存失败"), err))?;
 
     std::fs::write(&metadata_path, comic_json)
-        .context(format!("写入文件`{metadata_path:?}`失败"))
+        .context(format!("写入文件`{}`失败", metadata_path.display()))
         .map_err(|err| CommandError::from(&format!("`{comic_title}`的元数据保存失败"), err))?;
 
     tracing::debug!("`{comic_title}`的元数据保存成功");
@@ -192,7 +192,7 @@ pub fn get_downloaded_comics(
     let download_dir = config.read().download_dir.clone();
     // 遍历下载目录，获取所有元数据文件的路径和修改时间
     let mut metadata_path_with_modify_time = std::fs::read_dir(&download_dir)
-        .context(format!("读取下载目录`{download_dir:?}`失败"))
+        .context(format!("读取下载目录`{}`失败", download_dir.display()))
         .map_err(|err| CommandError::from("获取已下载的漫画失败", err))?
         .filter_map(Result::ok)
         .filter_map(|entry| {
@@ -209,17 +209,17 @@ pub fn get_downloaded_comics(
     // 从元数据文件中读取Comic
     let downloaded_comics = metadata_path_with_modify_time
         .iter()
-        .filter_map(|(metadata_path, _)| {
-            match Comic::from_metadata(&app, metadata_path).map_err(anyhow::Error::from) {
+        .filter_map(
+            |(metadata_path, _)| match Comic::from_metadata(&app, metadata_path) {
                 Ok(comic) => Some(comic),
                 Err(err) => {
-                    let err_title = format!("读取元数据文件`{metadata_path:?}`失败");
+                    let err_title = format!("读取元数据文件`{}`失败", metadata_path.display());
                     let string_chain = err.to_string_chain();
                     tracing::error!(err_title, message = string_chain);
                     None
                 }
-            }
-        })
+            },
+        )
         .collect::<Vec<_>>();
 
     tracing::debug!("获取已下载的漫画成功");
@@ -332,7 +332,7 @@ pub fn get_logs_dir_size(app: AppHandle) -> CommandResult<u64> {
         .context("获取日志目录失败")
         .map_err(|err| CommandError::from("获取日志目录大小失败", err))?;
     let logs_dir_size = std::fs::read_dir(&logs_dir)
-        .context(format!("读取日志目录`{logs_dir:?}`失败"))
+        .context(format!("读取日志目录`{}`失败", logs_dir.display()))
         .map_err(|err| CommandError::from("获取日志目录大小失败", err))?
         .filter_map(Result::ok)
         .filter_map(|entry| entry.metadata().ok())
