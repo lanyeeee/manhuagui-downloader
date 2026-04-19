@@ -1,13 +1,15 @@
 use std::{collections::HashMap, path::Path};
 
 use anyhow::{anyhow, Context};
-use parking_lot::RwLock;
 use scraper::{ElementRef, Html, Selector};
 use serde::{Deserialize, Serialize};
 use specta::Type;
-use tauri::{AppHandle, Manager};
+use tauri::AppHandle;
 
-use crate::{config::Config, extensions::ToAnyhow, utils::filename_filter};
+use crate::{
+    extensions::{AppHandleExt, ToAnyhow},
+    utils::filename_filter,
+};
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
@@ -216,7 +218,7 @@ impl ChapterInfo {
         group_name: &str,
         prefixed_chapter_title: &str,
     ) -> bool {
-        app.state::<RwLock<Config>>()
+        app.get_config()
             .read()
             .download_dir
             .join(comic_title)
@@ -447,7 +449,7 @@ fn get_is_downloaded(
     group_name: &str,
     prefixed_chapter_title: &str,
 ) -> bool {
-    app.state::<RwLock<Config>>()
+    app.get_config()
         .read()
         .download_dir
         .join(comic_title)

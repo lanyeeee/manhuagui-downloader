@@ -13,7 +13,7 @@ use anyhow::{anyhow, Context};
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use specta::Type;
-use tauri::{AppHandle, Manager};
+use tauri::AppHandle;
 use tauri_specta::Event;
 use tokio::{
     sync::{watch, Semaphore, SemaphorePermit},
@@ -22,16 +22,15 @@ use tokio::{
 };
 
 use crate::{
-    config::Config,
     events::{DownloadEvent, DownloadTaskEvent},
-    extensions::AnyhowErrorToStringChain,
+    extensions::{AnyhowErrorToStringChain, AppHandleExt},
     manhuagui_client::ManhuaguiClient,
     types::ChapterInfo,
 };
 
 /// 用于管理下载任务
 ///
-/// 克隆 `DownloadManager` 的开销极小，性能开销几乎可以忽略不计。  
+/// 克隆 `DownloadManager` 的开销极小，性能开销几乎可以忽略不计。
 /// 可以放心地在多个线程中传递和使用它的克隆副本。  
 ///
 /// 具体来说：  
@@ -49,7 +48,7 @@ pub struct DownloadManager {
 impl DownloadManager {
     pub fn new(app: &AppHandle) -> Self {
         let (chapter_concurrency, img_concurrency) = {
-            let config = app.state::<RwLock<Config>>();
+            let config = app.get_config();
             let config = config.read();
             (config.chapter_concurrency, config.img_concurrency)
         };
@@ -131,7 +130,7 @@ impl DownloadManager {
 
         loop {
             interval.tick().await;
-            let manager = app.state::<DownloadManager>();
+            let manager = app.get_download_manager();
             let byte_per_sec = manager.byte_per_sec.swap(0, Ordering::Relaxed);
             let mega_byte_per_sec = byte_per_sec as f64 / 1024.0 / 1024.0;
             let speed = format!("{mega_byte_per_sec:.2} MB/s");
@@ -163,7 +162,7 @@ struct DownloadTask {
 
 impl DownloadTask {
     pub fn new(app: AppHandle, chapter_info: ChapterInfo) -> Self {
-        let download_manager = app.state::<DownloadManager>().inner().clone();
+        let download_manager = app.get_download_manager().inner().clone();
         let (state_sender, _) = watch::channel(DownloadTaskState::Pending);
         Self {
             app,
@@ -435,7 +434,7 @@ impl DownloadTask {
 
         let temp_download_dir = self
             .app
-            .state::<RwLock<Config>>()
+            .get_config()
             .read()
             .download_dir
             .join(comic_title)
@@ -489,11 +488,7 @@ impl DownloadTask {
 
     async fn sleep_between_chapters(&self) {
         let chapter_id = self.chapter_info.chapter_id;
-        let mut remaining_sec = self
-            .app
-            .state::<RwLock<Config>>()
-            .read()
-            .chapter_download_interval_sec;
+        let mut remaining_sec = self.app.get_config().read().chapter_download_interval_sec;
         while remaining_sec > 0 {
             // 发送章节休眠事件
             let _ = DownloadEvent::Sleeping {
@@ -528,7 +523,7 @@ impl DownloadTask {
         .emit(&self.app);
     }
     fn manhuagui_client(&self) -> ManhuaguiClient {
-        self.app.state::<ManhuaguiClient>().inner().clone()
+        self.app.get_manhuagui_client().inner().clone()
     }
 }
 
@@ -643,11 +638,7 @@ impl DownloadImgTask {
         }
         .emit(&self.app);
 
-        let img_download_interval_sec = self
-            .app
-            .state::<RwLock<Config>>()
-            .read()
-            .img_download_interval_sec;
+        let img_download_interval_sec = self.app.get_config().read().img_download_interval_sec;
         sleep(Duration::from_secs(img_download_interval_sec)).await;
     }
 
@@ -738,6 +729,6 @@ impl DownloadImgTask {
     }
 
     fn manhuagui_client(&self) -> ManhuaguiClient {
-        self.app.state::<ManhuaguiClient>().inner().clone()
+        self.app.get_manhuagui_client().inner().clone()
     }
 }

@@ -10,15 +10,14 @@ use lopdf::{
     content::{Content, Operation},
     dictionary, Bookmark, Document, Object, Stream,
 };
-use parking_lot::RwLock;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
-use tauri::{AppHandle, Manager};
+use tauri::AppHandle;
 use tauri_specta::Event;
 use zip::{write::SimpleFileOptions, ZipWriter};
 
 use crate::{
-    config::Config,
     events::{ExportCbzEvent, ExportPdfEvent},
+    extensions::AppHandleExt,
     types::{ChapterInfo, Comic, ComicInfo},
 };
 
@@ -467,7 +466,7 @@ fn get_chapter_export_dir(
     chapter_info: &ChapterInfo,
     archive: &Archive,
 ) -> PathBuf {
-    app.state::<RwLock<Config>>()
+    app.get_config()
         .read()
         .export_dir
         .join(&chapter_info.comic_title)
@@ -476,7 +475,7 @@ fn get_chapter_export_dir(
 }
 
 fn get_group_export_dir(app: &AppHandle, comic_title: &str, archive: &Archive) -> PathBuf {
-    app.state::<RwLock<Config>>()
+    app.get_config()
         .read()
         .export_dir
         .join(comic_title)
@@ -484,7 +483,7 @@ fn get_group_export_dir(app: &AppHandle, comic_title: &str, archive: &Archive) -
 }
 
 fn get_chapter_download_dir(app: &AppHandle, chapter_info: &ChapterInfo) -> PathBuf {
-    app.state::<RwLock<Config>>()
+    app.get_config()
         .read()
         .download_dir
         .join(&chapter_info.comic_title)

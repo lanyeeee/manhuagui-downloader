@@ -1,21 +1,18 @@
 use std::{collections::HashMap, time::Duration};
 
 use anyhow::Context;
-use parking_lot::RwLock;
-use tauri::{AppHandle, Manager, State};
+use tauri::AppHandle;
 use tauri_plugin_opener::OpenerExt;
 use tauri_specta::Event;
 use tokio::time::sleep;
 
 use crate::{
     config::Config,
-    download_manager::DownloadManager,
     errors::{CommandError, CommandResult},
     events::UpdateDownloadedComicsEvent,
     export,
-    extensions::AnyhowErrorToStringChain,
+    extensions::{AnyhowErrorToStringChain, AppHandleExt},
     logger,
-    manhuagui_client::ManhuaguiClient,
     types::{ChapterInfo, Comic, GetFavoriteResult, SearchResult, UserProfile},
 };
 
@@ -28,8 +25,9 @@ pub fn greet(name: &str) -> String {
 #[tauri::command]
 #[specta::specta]
 #[allow(clippy::needless_pass_by_value)]
-pub fn get_config(config: tauri::State<RwLock<Config>>) -> Config {
-    let config = config.read().clone();
+pub fn get_config(app: AppHandle) -> Config {
+    let config = app.get_config().read().clone();
+
     tracing::debug!("获取配置成功");
     config
 }
@@ -37,11 +35,9 @@ pub fn get_config(config: tauri::State<RwLock<Config>>) -> Config {
 #[tauri::command(async)]
 #[specta::specta]
 #[allow(clippy::needless_pass_by_value)]
-pub fn save_config(
-    app: AppHandle,
-    config_state: State<RwLock<Config>>,
-    config: Config,
-) -> CommandResult<()> {
+pub fn save_config(app: AppHandle, config: Config) -> CommandResult<()> {
+    let config_state = app.get_config();
+
     let enable_file_logger = config.enable_file_logger;
     let enable_file_logger_changed = config_state
         .read()
@@ -71,11 +67,9 @@ pub fn save_config(
 
 #[tauri::command(async)]
 #[specta::specta]
-pub async fn login(
-    manhuagui_client: State<'_, ManhuaguiClient>,
-    username: String,
-    password: String,
-) -> CommandResult<String> {
+pub async fn login(app: AppHandle, username: String, password: String) -> CommandResult<String> {
+    let manhuagui_client = app.get_manhuagui_client();
+
     let cookie = manhuagui_client
         .login(&username, &password)
         .await
@@ -86,9 +80,9 @@ pub async fn login(
 
 #[tauri::command(async)]
 #[specta::specta]
-pub async fn get_user_profile(
-    manhuagui_client: State<'_, ManhuaguiClient>,
-) -> CommandResult<UserProfile> {
+pub async fn get_user_profile(app: AppHandle) -> CommandResult<UserProfile> {
+    let manhuagui_client = app.get_manhuagui_client();
+
     let user_profile = manhuagui_client
         .get_user_profile()
         .await
@@ -99,11 +93,9 @@ pub async fn get_user_profile(
 
 #[tauri::command(async)]
 #[specta::specta]
-pub async fn search(
-    manhuagui_client: State<'_, ManhuaguiClient>,
-    keyword: String,
-    page_num: i64,
-) -> CommandResult<SearchResult> {
+pub async fn search(app: AppHandle, keyword: String, page_num: i64) -> CommandResult<SearchResult> {
+    let manhuagui_client = app.get_manhuagui_client();
+
     let search_result = manhuagui_client
         .search(&keyword, page_num)
         .await
@@ -114,10 +106,9 @@ pub async fn search(
 
 #[tauri::command(async)]
 #[specta::specta]
-pub async fn get_comic(
-    manhuagui_client: State<'_, ManhuaguiClient>,
-    id: i64,
-) -> CommandResult<Comic> {
+pub async fn get_comic(app: AppHandle, id: i64) -> CommandResult<Comic> {
+    let manhuagui_client = app.get_manhuagui_client();
+
     let comic = manhuagui_client
         .get_comic(id)
         .await
@@ -129,7 +120,9 @@ pub async fn get_comic(
 #[allow(clippy::needless_pass_by_value)]
 #[tauri::command(async)]
 #[specta::specta]
-pub fn download_chapters(download_manager: State<DownloadManager>, chapters: Vec<ChapterInfo>) {
+pub fn download_chapters(app: AppHandle, chapters: Vec<ChapterInfo>) {
+    let download_manager = app.get_download_manager();
+
     for chapter in chapters {
         download_manager.create_download_task(chapter);
     }
@@ -138,10 +131,9 @@ pub fn download_chapters(download_manager: State<DownloadManager>, chapters: Vec
 
 #[tauri::command(async)]
 #[specta::specta]
-pub async fn get_favorite(
-    manhuagui_client: State<'_, ManhuaguiClient>,
-    page_num: i64,
-) -> CommandResult<GetFavoriteResult> {
+pub async fn get_favorite(app: AppHandle, page_num: i64) -> CommandResult<GetFavoriteResult> {
+    let manhuagui_client = app.get_manhuagui_client();
+
     let get_favorite_result = manhuagui_client
         .get_favorite(page_num)
         .await
@@ -153,7 +145,9 @@ pub async fn get_favorite(
 #[tauri::command(async)]
 #[specta::specta]
 #[allow(clippy::needless_pass_by_value)]
-pub fn save_metadata(config: State<RwLock<Config>>, mut comic: Comic) -> CommandResult<()> {
+pub fn save_metadata(app: AppHandle, mut comic: Comic) -> CommandResult<()> {
+    let config = app.get_config();
+
     // 将所有章节的is_downloaded字段设置为None，这样能使is_downloaded字段在序列化时被忽略
     for chapter_infos in comic.groups.values_mut() {
         for chapter_info in chapter_infos.iter_mut() {
@@ -185,10 +179,9 @@ pub fn save_metadata(config: State<RwLock<Config>>, mut comic: Comic) -> Command
 #[tauri::command(async)]
 #[specta::specta]
 #[allow(clippy::needless_pass_by_value)]
-pub fn get_downloaded_comics(
-    app: AppHandle,
-    config: State<RwLock<Config>>,
-) -> CommandResult<Vec<Comic>> {
+pub fn get_downloaded_comics(app: AppHandle) -> CommandResult<Vec<Comic>> {
+    let config = app.get_config();
+
     let download_dir = config.read().download_dir.clone();
     // 遍历下载目录，获取所有元数据文件的路径和修改时间
     let mut metadata_path_with_modify_time = std::fs::read_dir(&download_dir)
@@ -251,29 +244,23 @@ pub fn export_pdf(app: AppHandle, comic: Comic) -> CommandResult<()> {
 #[allow(clippy::cast_possible_wrap)]
 #[tauri::command(async)]
 #[specta::specta]
-pub async fn update_downloaded_comics(
-    app: AppHandle,
-    download_manager: State<'_, DownloadManager>,
-) -> CommandResult<()> {
+pub async fn update_downloaded_comics(app: AppHandle) -> CommandResult<()> {
     // 从下载目录中获取已下载的漫画
-    let downloaded_comics = get_downloaded_comics(app.clone(), app.state::<RwLock<Config>>())?;
+    let downloaded_comics = get_downloaded_comics(app.clone())?;
     // 用于存储最新的漫画信息
     let mut latest_comics = Vec::new();
     // 发送正在获取漫画事件
     let total = downloaded_comics.len() as i64;
     let _ = UpdateDownloadedComicsEvent::GettingComics { total }.emit(&app);
 
-    let update_get_comic_interval_sec = app
-        .state::<RwLock<Config>>()
-        .read()
-        .update_get_comic_interval_sec;
+    let update_get_comic_interval_sec = app.get_config().read().update_get_comic_interval_sec;
 
     // 获取已下载漫画的最新信息，不用并发是有意为之，防止被封IP
     for (i, downloaded_comic) in downloaded_comics.iter().enumerate() {
         // 获取最新的漫画信息
-        let comic = get_comic(app.state::<ManhuaguiClient>(), downloaded_comic.id).await?;
+        let comic = get_comic(app.clone(), downloaded_comic.id).await?;
         // 将最新的漫画信息保存到元数据文件
-        save_metadata(app.state::<RwLock<Config>>(), comic.clone())?;
+        save_metadata(app.clone(), comic.clone())?;
 
         latest_comics.push(comic);
         // 发送获取到漫画事件
@@ -316,7 +303,7 @@ pub async fn update_downloaded_comics(
         })
         .collect::<Vec<_>>();
     // 下载未下载章节
-    download_chapters(download_manager, chapters_to_download);
+    download_chapters(app.clone(), chapters_to_download);
     // 发送下载任务创建完成事件
     let _ = UpdateDownloadedComicsEvent::DownloadTaskCreated.emit(&app);
 
@@ -357,10 +344,9 @@ pub fn show_path_in_file_manager(app: AppHandle, path: &str) -> CommandResult<()
 #[allow(clippy::needless_pass_by_value)]
 #[tauri::command(async)]
 #[specta::specta]
-pub fn pause_download_task(
-    download_manager: State<DownloadManager>,
-    chapter_id: i64,
-) -> CommandResult<()> {
+pub fn pause_download_task(app: AppHandle, chapter_id: i64) -> CommandResult<()> {
+    let download_manager = app.get_download_manager();
+
     download_manager
         .pause_download_task(chapter_id)
         .map_err(|err| CommandError::from(&format!("暂停章节ID为`{chapter_id}`的下载任务"), err))?;
@@ -371,10 +357,9 @@ pub fn pause_download_task(
 #[allow(clippy::needless_pass_by_value)]
 #[tauri::command(async)]
 #[specta::specta]
-pub fn resume_download_task(
-    download_manager: State<DownloadManager>,
-    chapter_id: i64,
-) -> CommandResult<()> {
+pub fn resume_download_task(app: AppHandle, chapter_id: i64) -> CommandResult<()> {
+    let download_manager = app.get_download_manager();
+
     download_manager
         .resume_download_task(chapter_id)
         .map_err(|err| {
@@ -387,10 +372,9 @@ pub fn resume_download_task(
 #[allow(clippy::needless_pass_by_value)]
 #[tauri::command(async)]
 #[specta::specta]
-pub fn cancel_download_task(
-    download_manager: State<DownloadManager>,
-    chapter_id: i64,
-) -> CommandResult<()> {
+pub fn cancel_download_task(app: AppHandle, chapter_id: i64) -> CommandResult<()> {
+    let download_manager = app.get_download_manager();
+
     download_manager
         .cancel_download_task(chapter_id)
         .map_err(|err| {

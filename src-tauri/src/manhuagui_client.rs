@@ -2,17 +2,15 @@ use std::time::Duration;
 
 use anyhow::{anyhow, Context};
 use bytes::Bytes;
-use parking_lot::RwLock;
 use reqwest::StatusCode;
 use reqwest_middleware::ClientWithMiddleware;
 use reqwest_retry::{policies::ExponentialBackoff, Jitter, RetryTransientMiddleware};
 use serde_json::json;
-use tauri::{AppHandle, Manager};
+use tauri::AppHandle;
 
 use crate::{
-    config::Config,
     decrypt::decrypt,
-    extensions::SendWithTimeoutMsg,
+    extensions::{AppHandleExt, SendWithTimeoutMsg},
     types::{ChapterInfo, Comic, GetFavoriteResult, SearchResult, UserProfile},
 };
 
@@ -70,7 +68,7 @@ impl ManhuaguiClient {
     }
 
     pub async fn get_user_profile(&self) -> anyhow::Result<UserProfile> {
-        let cookie = self.app.state::<RwLock<Config>>().read().cookie.clone();
+        let cookie = self.app.get_config().read().cookie.clone();
         // 发送获取用户信息请求
         let http_resp = self
             .api_client
@@ -165,7 +163,7 @@ impl ManhuaguiClient {
     }
 
     pub async fn get_favorite(&self, page_num: i64) -> anyhow::Result<GetFavoriteResult> {
-        let cookie = self.app.state::<RwLock<Config>>().read().cookie.clone();
+        let cookie = self.app.get_config().read().cookie.clone();
         // 发送获取收藏夹请求
         let url = format!("https://www.manhuagui.com/user/book/shelf/{page_num}");
         let http_resp = self

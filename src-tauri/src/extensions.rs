@@ -1,7 +1,11 @@
 use anyhow::anyhow;
+use parking_lot::RwLock;
 use reqwest::Response;
 use reqwest_middleware::RequestBuilder;
 use scraper::error::SelectorErrorKind;
+use tauri::{Manager, State};
+
+use crate::{config::Config, download_manager::DownloadManager, manhuagui_client::ManhuaguiClient};
 
 pub trait AnyhowErrorToStringChain {
     /// 将 `anyhow::Error` 转换为chain格式
@@ -53,5 +57,23 @@ impl SendWithTimeoutMsg for RequestBuilder {
                 anyhow::Error::from(e)
             }
         })
+    }
+}
+
+pub trait AppHandleExt {
+    fn get_config(&self) -> State<'_, RwLock<Config>>;
+    fn get_manhuagui_client(&self) -> State<'_, ManhuaguiClient>;
+    fn get_download_manager(&self) -> State<'_, DownloadManager>;
+}
+
+impl AppHandleExt for tauri::AppHandle {
+    fn get_config(&self) -> State<'_, RwLock<Config>> {
+        self.state::<RwLock<Config>>()
+    }
+    fn get_manhuagui_client(&self) -> State<'_, ManhuaguiClient> {
+        self.state::<ManhuaguiClient>()
+    }
+    fn get_download_manager(&self) -> State<'_, DownloadManager> {
+        self.state::<DownloadManager>()
     }
 }
