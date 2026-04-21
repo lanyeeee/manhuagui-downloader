@@ -2,7 +2,7 @@ import { App as AntdApp, Button, Checkbox, CheckboxProps, Dropdown, Empty, MenuP
 import { ChapterInfo, Comic, commands } from '../bindings.ts'
 import { useEffect, useMemo, useState } from 'react'
 import SelectionArea, { SelectionEvent } from '@viselect/react'
-import styles from '../styles/ChapterPane.module.css'
+import styles from './ChapterPane.module.css'
 
 interface Props {
   pickedComic: Comic | undefined

@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { ChapterInfo, commands, DownloadTaskState } from '../../../bindings.ts'
 import SelectionArea, { SelectionEvent, useSelection } from '@viselect/react'
 import { Dropdown, MenuProps, Progress } from 'antd'
-import styles from '../../../styles/UncompletedProgresses.module.css'
+import styles from './UncompletedProgresses.module.css'
 import {
   CaretRightIcon,
   ChecksIcon,
