@@ -2,7 +2,7 @@ import { Comic, commands, SearchResult } from '../bindings.ts'
 import { CurrentTabName } from '../types.ts'
 import { useState } from 'react'
 import { App as AntdApp, Button, Pagination, Space } from 'antd'
-import ComicCard from '../components/ComicCard.tsx'
+import ComicCard from '../components/ComicCard.vue'
 import FloatLabelInput from '../components/FloatLabelInput.vue'
 import { ArrowRightIcon, MagnifyingGlassIcon } from '@phosphor-icons/react'
 

@@ -12,10 +12,12 @@ export {}
 /* prettier-ignore */
 declare module 'vue' {
   export interface GlobalComponents {
+    ComicCard: typeof import('./src/components/ComicCard.vue')['default']
     FloatLabelInput: typeof import('./src/components/FloatLabelInput.vue')['default']
     NA: typeof import('naive-ui')['NA']
     NAvatar: typeof import('naive-ui')['NAvatar']
     NButton: typeof import('naive-ui')['NButton']
+    NCard: typeof import('naive-ui')['NCard']
     NCheckbox: typeof import('naive-ui')['NCheckbox']
     NConfigProvider: typeof import('naive-ui')['NConfigProvider']
     NDialog: typeof import('naive-ui')['NDialog']
@@ -29,7 +31,9 @@ declare module 'vue' {
     NModal: typeof import('naive-ui')['NModal']
     NModalProvider: typeof import('naive-ui')['NModalProvider']
     NNotificationProvider: typeof import('naive-ui')['NNotificationProvider']
+    NPagination: typeof import('naive-ui')['NPagination']
     NSelect: typeof import('naive-ui')['NSelect']
+    NTabPane: typeof import('naive-ui')['NTabPane']
     NTabs: typeof import('naive-ui')['NTabs']
     NVirtualList: typeof import('naive-ui')['NVirtualList']
   }
@@ -37,10 +41,12 @@ declare module 'vue' {
 
 // For TSX support
 declare global {
+  const ComicCard: typeof import('./src/components/ComicCard.vue')['default']
   const FloatLabelInput: typeof import('./src/components/FloatLabelInput.vue')['default']
   const NA: typeof import('naive-ui')['NA']
   const NAvatar: typeof import('naive-ui')['NAvatar']
   const NButton: typeof import('naive-ui')['NButton']
+  const NCard: typeof import('naive-ui')['NCard']
   const NCheckbox: typeof import('naive-ui')['NCheckbox']
   const NConfigProvider: typeof import('naive-ui')['NConfigProvider']
   const NDialog: typeof import('naive-ui')['NDialog']
@@ -54,7 +60,9 @@ declare global {
   const NModal: typeof import('naive-ui')['NModal']
   const NModalProvider: typeof import('naive-ui')['NModalProvider']
   const NNotificationProvider: typeof import('naive-ui')['NNotificationProvider']
+  const NPagination: typeof import('naive-ui')['NPagination']
   const NSelect: typeof import('naive-ui')['NSelect']
+  const NTabPane: typeof import('naive-ui')['NTabPane']
   const NTabs: typeof import('naive-ui')['NTabs']
   const NVirtualList: typeof import('naive-ui')['NVirtualList']
 }
