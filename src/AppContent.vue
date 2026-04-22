@@ -6,7 +6,7 @@ import ProgressesPane from './panes/ProgressesPane/ProgressesPane.tsx'
 import { CurrentTabName } from './types.ts'
 import SearchPane from './panes/SearchPane.tsx'
 import ChapterPane from './panes/ChapterPane.tsx'
-import FavoritePane from './panes/FavoritePane.tsx'
+import FavoritePane from './panes/FavoritePane.vue'
 import DownloadedPane from './panes/DownloadedPane/DownloadedPane.tsx'
 import LogDialog from './dialogs/LogDialog.vue'
 import AboutDialog from './dialogs/AboutDialog.vue'
@@ -128,9 +128,9 @@ onMounted(async () => {
         <!--        <n-tab-pane class="h-full overflow-auto p-0!" name="search" tab="漫画搜索" display-directive="show">-->
         <!--          <SearchPane />-->
         <!--        </n-tab-pane>-->
-        <!--        <n-tab-pane class="h-full overflow-auto p-0!" name="favorite" tab="漫画收藏" display-directive="show">-->
-        <!--          <FavoritePane />-->
-        <!--        </n-tab-pane>-->
+        <n-tab-pane class="h-full overflow-auto p-0!" name="favorite" tab="漫画收藏" display-directive="show">
+          <FavoritePane />
+        </n-tab-pane>
         <!--        <n-tab-pane class="h-full overflow-auto p-0!" name="downloaded" tab="本地库存" display-directive="show">-->
         <!--          <DownloadedPane />-->
         <!--        </n-tab-pane>-->
@@ -179,3 +179,17 @@ onMounted(async () => {
     </div>
   </div>
 </template>
+
+<style scoped>
+:global(.n-notification-main__header) {
+  @apply break-words;
+}
+
+:global(.n-tabs-pane-wrapper) {
+  @apply h-full;
+}
+
+:deep(.n-tabs-nav) {
+  @apply px-2;
+}
+</style>
