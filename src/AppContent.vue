@@ -4,7 +4,7 @@ import { Avatar, Button, Tabs, TabsProps } from 'antd'
 import LoginDialog from './dialogs/LoginDialog.vue'
 import ProgressesPane from './panes/ProgressesPane/ProgressesPane.tsx'
 import { CurrentTabName } from './types.ts'
-import SearchPane from './panes/SearchPane.tsx'
+import SearchPane from './panes/SearchPane.vue'
 import ChapterPane from './panes/ChapterPane.tsx'
 import FavoritePane from './panes/FavoritePane.vue'
 import DownloadedPane from './panes/DownloadedPane/DownloadedPane.tsx'
@@ -125,9 +125,9 @@ onMounted(async () => {
 
     <div class="flex flex-1 overflow-hidden">
       <n-tabs class="h-full w-1/2" v-model:value="store.currentTabName" type="line" size="small" animated>
-        <!--        <n-tab-pane class="h-full overflow-auto p-0!" name="search" tab="漫画搜索" display-directive="show">-->
-        <!--          <SearchPane />-->
-        <!--        </n-tab-pane>-->
+        <n-tab-pane class="h-full overflow-auto p-0!" name="search" tab="漫画搜索" display-directive="show">
+          <SearchPane />
+        </n-tab-pane>
         <n-tab-pane class="h-full overflow-auto p-0!" name="favorite" tab="漫画收藏" display-directive="show">
           <FavoritePane />
         </n-tab-pane>
