@@ -16,6 +16,7 @@
     "@tauri-apps/plugin-dialog": "~2",
     "@tauri-apps/plugin-opener": "^2",
     "@viselect/react": "^3.7.0",
+    "@viselect/vue": "^3.9.0",
     "antd": "^6.2.2",
     "clsx": "^2.1.1",
     "naive-ui": "^2.43.2",
@@ -28,7 +29,8 @@
     "unocss": "^0.65.4",
     "unplugin-auto-import": "^21.0.0",
     "unplugin-vue-components": "^31.0.0",
-    "vue": "^3.5.27"
+    "vue": "^3.5.27",
+    "z-vue-scan": "^0.0.35"
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",
