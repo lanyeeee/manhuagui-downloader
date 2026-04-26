@@ -1,9 +1,7 @@
 <script setup lang="tsx">
 import { commands } from './bindings.ts'
-import { Avatar, Button, Tabs, TabsProps } from 'antd'
 import LoginDialog from './dialogs/LoginDialog.vue'
-import ProgressesPane from './panes/ProgressesPane/ProgressesPane.tsx'
-import { CurrentTabName } from './types.ts'
+import ProgressesPane from './panes/ProgressesPane/ProgressesPane.vue'
 import SearchPane from './panes/SearchPane.vue'
 import ChapterPane from './panes/ChapterPane.vue'
 import FavoritePane from './panes/FavoritePane.vue'
@@ -169,7 +167,7 @@ onMounted(async () => {
             关于
           </n-button>
         </div>
-        <!--        <ProgressesPane />-->
+        <ProgressesPane />
       </div>
 
       <LoginDialog v-model:showing="loginDialogShowing" />
