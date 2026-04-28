@@ -16,6 +16,9 @@ pub struct Config {
     pub img_concurrency: usize,
     pub img_download_interval_sec: u64,
     pub update_get_comic_interval_sec: u64,
+    pub proxy_mode: ProxyMode,
+    pub proxy_host: String,
+    pub proxy_port: u16,
 }
 
 impl Config {
@@ -80,6 +83,17 @@ impl Config {
             img_concurrency: 10,
             img_download_interval_sec: 0,
             update_get_comic_interval_sec: 0,
+            proxy_mode: ProxyMode::System,
+            proxy_host: "127.0.0.1".to_string(),
+            proxy_port: 7890,
         }
     }
+}
+
+#[derive(Default, Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Type)]
+pub enum ProxyMode {
+    #[default]
+    System,
+    NoProxy,
+    Custom,
 }

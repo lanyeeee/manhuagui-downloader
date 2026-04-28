@@ -37,6 +37,14 @@ pub fn get_config(app: AppHandle) -> Config {
 #[allow(clippy::needless_pass_by_value)]
 pub fn save_config(app: AppHandle, config: Config) -> CommandResult<()> {
     let config_state = app.get_config();
+    let manhuagui_client = app.get_manhuagui_client();
+
+    let proxy_changed = {
+        let config_state = config_state.read();
+        config_state.proxy_mode != config.proxy_mode
+            || config_state.proxy_host != config.proxy_host
+            || config_state.proxy_port != config.proxy_port
+    };
 
     let enable_file_logger = config.enable_file_logger;
     let enable_file_logger_changed = config_state
@@ -44,13 +52,19 @@ pub fn save_config(app: AppHandle, config: Config) -> CommandResult<()> {
         .enable_file_logger
         .ne(&enable_file_logger);
 
-    let mut config_state = config_state.write();
-    *config_state = config;
-    config_state
-        .save(&app)
-        .map_err(|err| CommandError::from("保存配置失败", err))?;
-    drop(config_state);
-    tracing::debug!("保存配置成功");
+    {
+        // 包裹在大括号中，以便自动释放写锁
+        let mut config_state = config_state.write();
+        *config_state = config;
+        config_state
+            .save(&app)
+            .map_err(|err| CommandError::from("保存配置失败", err))?;
+        tracing::debug!("保存配置成功");
+    }
+
+    if proxy_changed {
+        manhuagui_client.reload_client();
+    }
 
     if enable_file_logger_changed {
         if enable_file_logger {
