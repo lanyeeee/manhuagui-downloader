@@ -342,7 +342,7 @@ aliases: string[];
  */
 intro: string }
 export type CommandError = { err_title: string; err_message: string }
-export type Config = { cookie: string; downloadDir: string; exportDir: string; enableFileLogger: boolean; chapterConcurrency: number; chapterDownloadIntervalSec: number; imgConcurrency: number; imgDownloadIntervalSec: number; updateGetComicIntervalSec: number }
+export type Config = { cookie: string; downloadDir: string; exportDir: string; enableFileLogger: boolean; chapterConcurrency: number; chapterDownloadIntervalSec: number; imgConcurrency: number; imgDownloadIntervalSec: number; updateGetComicIntervalSec: number; proxyMode: ProxyMode; proxyHost: string; proxyPort: number }
 export type DownloadEvent = { event: "Speed"; data: { speed: string } } | { event: "Sleeping"; data: { chapterId: number; remainingSec: number } }
 export type DownloadTaskEvent = { state: DownloadTaskState; chapterInfo: ChapterInfo; downloadedImgCount: number; totalImgCount: number }
 export type DownloadTaskState = "Pending" | "Downloading" | "Paused" | "Cancelled" | "Completed" | "Failed"
@@ -352,6 +352,7 @@ export type GetFavoriteResult = { comics: ComicInFavorite[]; current: number; to
 export type JsonValue = null | boolean | number | string | JsonValue[] | { [key in string]: JsonValue }
 export type LogEvent = { timestamp: string; level: LogLevel; fields: { [key in string]: JsonValue }; target: string; filename: string; line_number: number }
 export type LogLevel = "TRACE" | "DEBUG" | "INFO" | "WARN" | "ERROR"
+export type ProxyMode = "System" | "NoProxy" | "Custom"
 export type SearchResult = { comics: ComicInSearch[]; current: number; total: number }
 export type UpdateDownloadedComicsEvent = { event: "GettingComics"; data: { total: number } } | { event: "ComicGot"; data: { current: number; total: number } } | { event: "DownloadTaskCreated" }
 export type UserProfile = { username: string; avatar: string }
