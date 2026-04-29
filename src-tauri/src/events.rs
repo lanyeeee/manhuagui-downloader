@@ -10,13 +10,36 @@ use crate::{
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type, Event)]
+#[serde(rename_all = "camelCase")]
+pub struct DownloadSpeedEvent {
+    pub speed: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type, Event)]
+#[serde(rename_all = "camelCase")]
+pub struct DownloadSleepingEvent {
+    pub chapter_id: i64,
+    pub remaining_sec: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type, Event)]
 #[serde(tag = "event", content = "data")]
-pub enum DownloadEvent {
+pub enum DownloadTaskEvent {
     #[serde(rename_all = "camelCase")]
-    Speed { speed: String },
+    Create {
+        state: DownloadTaskState,
+        chapter_info: ChapterInfo,
+        downloaded_img_count: u32,
+        total_img_count: u32,
+    },
 
     #[serde(rename_all = "camelCase")]
-    Sleeping { chapter_id: i64, remaining_sec: u64 },
+    Update {
+        state: DownloadTaskState,
+        chapter_id: i64,
+        downloaded_img_count: u32,
+        total_img_count: u32,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type, Event)]
@@ -89,13 +112,4 @@ pub struct LogEvent {
     pub filename: String,
     #[serde(rename = "line_number")]
     pub line_number: i64,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Type, Event)]
-#[serde(rename_all = "camelCase")]
-pub struct DownloadTaskEvent {
-    pub state: DownloadTaskState,
-    pub chapter_info: ChapterInfo,
-    pub downloaded_img_count: u32,
-    pub total_img_count: u32,
 }

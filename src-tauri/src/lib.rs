@@ -15,8 +15,8 @@ use anyhow::Context;
 use config::Config;
 use download_manager::DownloadManager;
 use events::{
-    DownloadEvent, DownloadTaskEvent, ExportCbzEvent, ExportPdfEvent, LogEvent,
-    UpdateDownloadedComicsEvent,
+    DownloadSleepingEvent, DownloadSpeedEvent, DownloadTaskEvent, ExportCbzEvent, ExportPdfEvent,
+    LogEvent, UpdateDownloadedComicsEvent,
 };
 use manhuagui_client::ManhuaguiClient;
 use parking_lot::RwLock;
@@ -53,12 +53,13 @@ pub fn run() {
             cancel_download_task,
         ])
         .events(tauri_specta::collect_events![
-            DownloadEvent,
+            DownloadSleepingEvent,
+            DownloadSpeedEvent,
+            DownloadTaskEvent,
             ExportCbzEvent,
             ExportPdfEvent,
             UpdateDownloadedComicsEvent,
             LogEvent,
-            DownloadTaskEvent,
         ]);
 
     #[cfg(debug_assertions)]

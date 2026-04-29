@@ -22,7 +22,7 @@ use tokio::{
 };
 
 use crate::{
-    events::{DownloadEvent, DownloadTaskEvent},
+    events::{DownloadSleepingEvent, DownloadSpeedEvent, DownloadTaskEvent},
     extensions::{AnyhowErrorToStringChain, AppHandleExt},
     manhuagui_client::ManhuaguiClient,
     types::ChapterInfo,
@@ -135,7 +135,7 @@ impl DownloadManager {
             let mega_byte_per_sec = byte_per_sec as f64 / 1024.0 / 1024.0;
             let speed = format!("{mega_byte_per_sec:.2} MB/s");
             // 发送总进度条下载速度事件
-            let _ = DownloadEvent::Speed { speed }.emit(&app);
+            let _ = DownloadSpeedEvent { speed }.emit(&app);
         }
     }
 }
@@ -175,6 +175,8 @@ impl DownloadTask {
     }
 
     async fn process(self) {
+        self.emit_download_task_create_event();
+
         let download_chapter_task = self.download_chapter();
         tokio::pin!(download_chapter_task);
 
@@ -248,7 +250,7 @@ impl DownloadTask {
             tracing::error!(err_title, message = err_msg);
 
             self.set_state(DownloadTaskState::Failed);
-            self.emit_download_task_event();
+            self.emit_download_task_update_event();
 
             return;
         }
@@ -259,7 +261,7 @@ impl DownloadTask {
             tracing::error!(err_title, message = string_chain);
 
             self.set_state(DownloadTaskState::Failed);
-            self.emit_download_task_event();
+            self.emit_download_task_update_event();
 
             return;
         }
@@ -283,7 +285,7 @@ impl DownloadTask {
         self.sleep_between_chapters().await;
         // 发送下载结束事件
         self.set_state(DownloadTaskState::Completed);
-        self.emit_download_task_event();
+        self.emit_download_task_update_event();
     }
 
     async fn acquire_chapter_permit<'a>(
@@ -303,7 +305,7 @@ impl DownloadTask {
             "章节开始排队"
         );
 
-        self.emit_download_task_event();
+        self.emit_download_task_update_event();
 
         *permit = match permit.take() {
             // 如果有permit，则直接用
@@ -325,7 +327,7 @@ impl DownloadTask {
                     tracing::error!(err_title, message = string_chain);
 
                     self.set_state(DownloadTaskState::Failed);
-                    self.emit_download_task_event();
+                    self.emit_download_task_update_event();
 
                     return ControlFlow::Break(());
                 }
@@ -361,7 +363,7 @@ impl DownloadTask {
         let group_name = &self.chapter_info.group_name;
         let chapter_title = &self.chapter_info.chapter_title;
 
-        self.emit_download_task_event();
+        self.emit_download_task_update_event();
         let state = *state_receiver.borrow();
         match state {
             DownloadTaskState::Paused => {
@@ -374,7 +376,7 @@ impl DownloadTask {
                 );
                 if let Some(permit) = permit.take() {
                     drop(permit);
-                };
+                }
                 ControlFlow::Continue(())
             }
             DownloadTaskState::Cancelled => {
@@ -417,7 +419,7 @@ impl DownloadTask {
                 tracing::error!(err_title, message = string_chain);
 
                 self.set_state(DownloadTaskState::Failed);
-                self.emit_download_task_event();
+                self.emit_download_task_update_event();
 
                 return None;
             }
@@ -450,7 +452,7 @@ impl DownloadTask {
             tracing::error!(err_title, message = string_chain);
 
             self.set_state(DownloadTaskState::Failed);
-            self.emit_download_task_event();
+            self.emit_download_task_update_event();
 
             return None;
         }
@@ -491,7 +493,7 @@ impl DownloadTask {
         let mut remaining_sec = self.app.get_config().read().chapter_download_interval_sec;
         while remaining_sec > 0 {
             // 发送章节休眠事件
-            let _ = DownloadEvent::Sleeping {
+            let _ = DownloadSleepingEvent {
                 chapter_id,
                 remaining_sec,
             }
@@ -513,8 +515,18 @@ impl DownloadTask {
         }
     }
 
-    fn emit_download_task_event(&self) {
-        let _ = DownloadTaskEvent {
+    fn emit_download_task_update_event(&self) {
+        let _ = DownloadTaskEvent::Update {
+            chapter_id: self.chapter_info.chapter_id,
+            state: *self.state_sender.borrow(),
+            downloaded_img_count: self.downloaded_img_count.load(Ordering::Relaxed),
+            total_img_count: self.total_img_count.load(Ordering::Relaxed),
+        }
+        .emit(&self.app);
+    }
+
+    fn emit_download_task_create_event(&self) {
+        let _ = DownloadTaskEvent::Create {
             state: *self.state_sender.borrow(),
             chapter_info: self.chapter_info.as_ref().clone(),
             downloaded_img_count: self.downloaded_img_count.load(Ordering::Relaxed),
@@ -531,10 +543,8 @@ impl DownloadTask {
 struct DownloadImgTask {
     app: AppHandle,
     download_manager: DownloadManager,
+    download_task: DownloadTask,
     chapter_info: Arc<ChapterInfo>,
-    state_sender: watch::Sender<DownloadTaskState>,
-    downloaded_img_count: Arc<AtomicU32>,
-    total_img_count: Arc<AtomicU32>,
     url: String,
     save_path: PathBuf,
 }
@@ -544,10 +554,8 @@ impl DownloadImgTask {
         Self {
             app: download_task.app.clone(),
             download_manager: download_task.download_manager.clone(),
+            download_task: download_task.clone(),
             chapter_info: download_task.chapter_info.clone(),
-            state_sender: download_task.state_sender.clone(),
-            downloaded_img_count: download_task.downloaded_img_count.clone(),
-            total_img_count: download_task.total_img_count.clone(),
             url,
             save_path,
         }
@@ -557,7 +565,7 @@ impl DownloadImgTask {
         let download_img_task = self.download_img();
         tokio::pin!(download_img_task);
 
-        let mut state_receiver = self.state_sender.subscribe();
+        let mut state_receiver = self.download_task.state_sender.subscribe();
         state_receiver.mark_changed();
         let mut permit = None;
 
@@ -628,15 +636,12 @@ impl DownloadImgTask {
         self.download_manager
             .byte_per_sec
             .fetch_add(img_data.len() as u64, Ordering::Relaxed);
-        tracing::debug!(chapter_id, url, "图片下载成功");
 
-        let _ = DownloadTaskEvent {
-            state: *self.state_sender.borrow(),
-            chapter_info: self.chapter_info.as_ref().clone(),
-            downloaded_img_count: self.downloaded_img_count.fetch_add(1, Ordering::Relaxed) + 1,
-            total_img_count: self.total_img_count.load(Ordering::Relaxed),
-        }
-        .emit(&self.app);
+        self.download_task
+            .downloaded_img_count
+            .fetch_add(1, Ordering::Relaxed);
+
+        self.download_task.emit_download_task_update_event();
 
         let img_download_interval_sec = self.app.get_config().read().img_download_interval_sec;
         sleep(Duration::from_secs(img_download_interval_sec)).await;
@@ -710,7 +715,7 @@ impl DownloadImgTask {
                 );
                 if let Some(permit) = permit.take() {
                     drop(permit);
-                };
+                }
                 ControlFlow::Continue(())
             }
             DownloadTaskState::Cancelled => {

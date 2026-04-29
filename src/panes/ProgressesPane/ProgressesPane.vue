@@ -11,62 +11,72 @@ const store = useStore()
 
 const downloadSpeed = ref<string>('')
 
-let unListenDownloadEvent: () => void | undefined
+let unListenDownloadSpeedEvent: () => void | undefined
+let unListenDownloadSleepingEvent: () => void | undefined
 let unListenDownloadTaskEvent: () => void | undefined
 
 onMounted(() => {
-  events.downloadEvent
-    .listen(({ payload: downloadEvent }) => {
-      if (downloadEvent.event === 'Sleeping') {
-        const { chapterId, remainingSec } = downloadEvent.data
-        const progressData = store.progresses.get(chapterId)
-        if (progressData !== undefined) {
-          progressData.indicator = `将在${remainingSec}秒后继续下载`
-        }
-      } else if (downloadEvent.event === 'Speed') {
-        const { speed } = downloadEvent.data
-        downloadSpeed.value = speed
+  events.downloadSpeedEvent
+    .listen(async ({ payload: { speed } }) => {
+      downloadSpeed.value = speed
+    })
+    .then((unListenFn) => {
+      unListenDownloadSpeedEvent = unListenFn
+    })
+
+  events.downloadSleepingEvent
+    .listen(async ({ payload: { chapterId, remainingSec } }) => {
+      const progressData = store.progresses.get(chapterId)
+      if (progressData !== undefined) {
+        progressData.indicator = `将在${remainingSec}秒后继续下载`
       }
     })
     .then((unListenFn) => {
-      unListenDownloadEvent = unListenFn
+      unListenDownloadSleepingEvent = unListenFn
     })
 
   events.downloadTaskEvent
-    .listen(({ payload: downloadTaskEvent }) => {
-      const { state, chapterInfo, downloadedImgCount, totalImgCount } = downloadTaskEvent
+    .listen(({ payload: { event, data } }) => {
+      if (event === 'Create') {
+        const { chapterInfo, downloadedImgCount, totalImgCount } = data
 
-      let indicator = ''
-      if (state === 'Pending') {
-        indicator = '排队中'
-      } else if (state === 'Downloading') {
-        indicator = '下载中'
-      } else if (state === 'Paused') {
-        indicator = '已暂停'
-      } else if (state === 'Cancelled') {
-        indicator = '已取消'
-      } else if (state === 'Completed') {
-        indicator = '下载完成'
-      } else if (state === 'Failed') {
-        indicator = '下载失败'
-      }
+        store.progresses.set(chapterInfo.chapterId, {
+          ...data,
+          percentage: 0,
+          indicator: `排队中 ${downloadedImgCount}/${totalImgCount}`,
+        })
+      } else if (event === 'Update') {
+        const { state, chapterId, downloadedImgCount, totalImgCount } = data
 
-      if (totalImgCount !== 0) {
-        indicator += ` ${downloadedImgCount}/${totalImgCount}`
-      }
+        const progressData = store.progresses.get(chapterId)
+        if (progressData === undefined) {
+          return
+        }
 
-      const percentage = (downloadedImgCount / totalImgCount) * 100
-
-      console.log(percentage)
-
-      const progressData = store.progresses.get(chapterInfo.chapterId)
-      if (progressData === undefined) {
-        store.progresses.set(chapterInfo.chapterId, { ...downloadTaskEvent, percentage, indicator })
-      } else {
         progressData.state = state
         progressData.downloadedImgCount = downloadedImgCount
         progressData.totalImgCount = totalImgCount
-        progressData.percentage = percentage
+        progressData.percentage = (downloadedImgCount / totalImgCount) * 100
+
+        let indicator = ''
+        if (state === 'Pending') {
+          indicator = '排队中'
+        } else if (state === 'Downloading') {
+          indicator = '下载中'
+        } else if (state === 'Paused') {
+          indicator = '已暂停'
+        } else if (state === 'Cancelled') {
+          indicator = '已取消'
+        } else if (state === 'Completed') {
+          indicator = '下载完成'
+        } else if (state === 'Failed') {
+          indicator = '下载失败'
+        }
+
+        if (totalImgCount !== 0) {
+          indicator += ` ${downloadedImgCount}/${totalImgCount}`
+        }
+
         progressData.indicator = indicator
       }
     })
@@ -76,7 +86,8 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
-  unListenDownloadEvent?.()
+  unListenDownloadSpeedEvent?.()
+  unListenDownloadSleepingEvent?.()
   unListenDownloadTaskEvent?.()
 })
 
