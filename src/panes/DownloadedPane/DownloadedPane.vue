@@ -6,6 +6,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useStore } from '../../store.ts'
 import { MessageReactive, useMessage } from 'naive-ui'
 import { PhFolderOpen } from '@phosphor-icons/vue'
+import UpdateDownloadedComicsButton from './components/UpdateDownloadedComicsButton.vue'
 
 interface ProgressData {
   comicTitle: string
@@ -55,7 +56,6 @@ watch(
 const progresses = ref<Map<string, ProgressData>>(new Map())
 let unListenExportCbzEvent: () => void | undefined
 let unListenExportPdfEvent: () => void | undefined
-let unListenUpdateEvents: () => void | undefined
 onMounted(() => {
   events.exportCbzEvent
     .listen(async ({ payload: exportCbzEvent }) => {
@@ -156,32 +156,11 @@ onMounted(() => {
     .then((unListenFn) => {
       unListenExportPdfEvent = unListenFn
     })
-
-  let updateMessage: MessageReactive | undefined
-  events.updateDownloadedComicsEvent
-    .listen(async ({ payload: updateEvent }) => {
-      if (updateEvent.event === 'GettingComics') {
-        const { total } = updateEvent.data
-        updateMessage = message.loading(`正在获取已下载漫画的最新数据(0/${total})`, { duration: 0 })
-      } else if (updateEvent.event === 'ComicGot' && updateMessage !== undefined) {
-        const { current, total } = updateEvent.data
-        updateMessage.content = `正在获取已下载漫画的最新数据(${current}/${total})`
-      } else if (updateEvent.event === 'DownloadTaskCreated' && updateMessage !== undefined) {
-        updateMessage.content = '已为需要更新的章节创建下载任务'
-        setTimeout(() => {
-          updateMessage?.destroy()
-        }, 3000)
-      }
-    })
-    .then((unListenFn) => {
-      unListenUpdateEvents = unListenFn
-    })
 })
 
 onUnmounted(() => {
   unListenExportCbzEvent?.()
   unListenExportPdfEvent?.()
-  unListenUpdateEvents?.()
 })
 
 async function selectExportDir() {
@@ -195,14 +174,6 @@ async function selectExportDir() {
   }
 
   store.config.exportDir = selectedDirPath
-}
-
-// 更新已下载漫画
-async function updateDownloadedComics() {
-  const result = await commands.updateDownloadedComics()
-  if (result.status === 'error') {
-    console.error(result.error)
-  }
 }
 
 async function showExportDirInFileManager() {
@@ -231,7 +202,7 @@ async function showExportDirInFileManager() {
           </template>
         </n-button>
       </n-input-group>
-      <n-button size="small" @click="updateDownloadedComics">更新库存</n-button>
+      <UpdateDownloadedComicsButton />
     </div>
 
     <div class="h-full flex flex-col gap-row-1 overflow-auto">

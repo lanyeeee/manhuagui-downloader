@@ -8,6 +8,7 @@ use tauri::AppHandle;
 
 use crate::{
     extensions::{AppHandleExt, ToAnyhow},
+    types::ChapterInfo,
     utils::filename_filter,
 };
 
@@ -41,6 +42,9 @@ pub struct Comic {
     pub intro: String,
     /// 组名(单话、单行本...)->章节信息
     pub groups: HashMap<String, Vec<ChapterInfo>>,
+    /// 是否已下载
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub is_downloaded: Option<bool>,
 }
 
 impl Comic {
@@ -138,7 +142,7 @@ impl Comic {
             get_groups(app, &chapter_div, id, &title, &status)?
         };
 
-        Ok(Comic {
+        let mut comic = Comic {
             id,
             title,
             subtitle,
@@ -152,7 +156,12 @@ impl Comic {
             aliases,
             intro,
             groups,
-        })
+            is_downloaded: None,
+        };
+
+        comic.update_fields(app);
+
+        Ok(comic)
     }
 
     pub fn from_metadata(app: &AppHandle, metadata_path: &Path) -> anyhow::Result<Comic> {
@@ -165,9 +174,20 @@ impl Comic {
             metadata_path.display()
         ))?;
         // 这个comic中的is_downloaded字段是None，需要重新计算
-        for chapter_infos in comic.groups.values_mut() {
+        comic.is_downloaded = Some(true);
+        comic.update_chapter_infos_fields(app);
+        Ok(comic)
+    }
+
+    pub fn update_fields(&mut self, app: &AppHandle) {
+        self.is_downloaded = Some(Comic::get_is_downloaded(app, &self.title));
+        self.update_chapter_infos_fields(app);
+    }
+
+    fn update_chapter_infos_fields(&mut self, app: &AppHandle) {
+        for chapter_infos in self.groups.values_mut() {
             for chapter_info in chapter_infos.iter_mut() {
-                let comic_title = &comic.title;
+                let comic_title = &self.title;
                 let group_name = &chapter_info.group_name;
                 let prefixed_chapter_title = &chapter_info.prefixed_chapter_title;
                 let is_downloaded = ChapterInfo::get_is_downloaded(
@@ -179,51 +199,13 @@ impl Comic {
                 chapter_info.is_downloaded = Some(is_downloaded);
             }
         }
-        Ok(comic)
     }
-}
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
-#[serde(rename_all = "camelCase")]
-pub struct ChapterInfo {
-    /// 章节id
-    pub chapter_id: i64,
-    /// 章节标题
-    pub chapter_title: String,
-    /// 此章节有多少页
-    pub chapter_size: i64,
-    /// 以order为前缀的章节标题
-    pub prefixed_chapter_title: String,
-    /// 漫画id
-    pub comic_id: i64,
-    /// 漫画标题
-    pub comic_title: String,
-    /// 组名(单话、单行本、番外篇)
-    pub group_name: String,
-    /// 此章节对应的group有多少章节
-    pub group_size: i64,
-    /// 此章节在group中的顺序
-    pub order: f64,
-    /// 漫画状态(连载中/已完结)
-    pub comic_status: String,
-    /// 是否已下载
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub is_downloaded: Option<bool>,
-}
-
-impl ChapterInfo {
-    pub fn get_is_downloaded(
-        app: &AppHandle,
-        comic_title: &str,
-        group_name: &str,
-        prefixed_chapter_title: &str,
-    ) -> bool {
+    pub fn get_is_downloaded(app: &AppHandle, comic_title: &str) -> bool {
         app.get_config()
             .read()
             .download_dir
             .join(comic_title)
-            .join(group_name)
-            .join(prefixed_chapter_title)
             .exists()
     }
 }
@@ -418,8 +400,12 @@ fn get_groups(
                     .parse::<i64>()
                     .context("章节页数不是整数")?;
 
-                let is_downloaded =
-                    get_is_downloaded(app, comic_title, &group_name, &prefixed_chapter_title);
+                let is_downloaded = ChapterInfo::get_is_downloaded(
+                    app,
+                    comic_title,
+                    &group_name,
+                    &prefixed_chapter_title,
+                );
 
                 chapter_infos.push(ChapterInfo {
                     chapter_id,
@@ -441,19 +427,4 @@ fn get_groups(
     }
 
     Ok(groups)
-}
-
-fn get_is_downloaded(
-    app: &AppHandle,
-    comic_title: &str,
-    group_name: &str,
-    prefixed_chapter_title: &str,
-) -> bool {
-    app.get_config()
-        .read()
-        .download_dir
-        .join(comic_title)
-        .join(group_name)
-        .join(prefixed_chapter_title)
-        .exists()
 }

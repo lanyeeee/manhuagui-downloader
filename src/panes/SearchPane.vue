@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { commands, SearchResult } from '../bindings.ts'
+import { commands } from '../bindings.ts'
 import ComicCard from '../components/ComicCard.vue'
 import FloatLabelInput from '../components/FloatLabelInput.vue'
 import { useMessage } from 'naive-ui'
@@ -14,18 +14,17 @@ const message = useMessage()
 const searchInput = ref<string>('')
 const comicIdInput = ref<string>('')
 const currentPage = ref<number>(1)
-const searchResult = ref<SearchResult>()
 const searching = ref<boolean>(false)
 const picking = ref<boolean>(false)
 
 const pageCount = computed(() => {
   const PAGE_SIZE = 10
 
-  if (searchResult.value === undefined) {
+  if (store.searchResult === undefined) {
     return 1
   }
 
-  return Math.ceil(searchResult.value.total / PAGE_SIZE)
+  return Math.ceil(store.searchResult.total / PAGE_SIZE)
 })
 
 async function search(keyword: string, pageNum: number) {
@@ -39,7 +38,7 @@ async function search(keyword: string, pageNum: number) {
     return
   }
 
-  searchResult.value = result.data
+  store.searchResult = result.data
   searching.value = false
 }
 
@@ -116,10 +115,10 @@ async function pickComic() {
       </n-button>
     </n-input-group>
 
-    <div v-if="searchResult !== undefined" class="flex flex-col overflow-auto">
+    <div v-if="store.searchResult !== undefined" class="flex flex-col overflow-auto">
       <div class="flex flex-col gap-row-2 overflow-auto p-2">
         <ComicCard
-          v-for="comic in searchResult.comics"
+          v-for="comic in store.searchResult.comics"
           :key="comic.id"
           :comicId="comic.id"
           :comicTitle="comic.title"
@@ -127,12 +126,13 @@ async function pickComic() {
           :comicSubtitle="comic.subtitle ?? undefined"
           :comicAuthors="comic.authors"
           :comicGenres="comic.genres"
-          :comicLastUpdateTime="comic.updateTime" />
+          :comicLastUpdateTime="comic.updateTime"
+          :comic-downloaded="comic.isDownloaded" />
       </div>
     </div>
 
     <n-pagination
-      v-if="searchResult !== undefined && searchResult.total > 0"
+      v-if="store.searchResult !== undefined && store.searchResult.total > 0"
       class="p-2 mt-auto"
       :page="currentPage"
       :pageCount="pageCount"

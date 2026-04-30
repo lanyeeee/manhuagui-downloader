@@ -13,7 +13,11 @@ use crate::{
     export,
     extensions::{AnyhowErrorToStringChain, AppHandleExt},
     logger,
-    types::{ChapterInfo, Comic, GetFavoriteResult, SearchResult, UserProfile},
+    types::{
+        ChapterInfo, Comic, ComicInFavorite, ComicInSearch, GetFavoriteResult, SearchResult,
+        UserProfile,
+    },
+    utils,
 };
 
 #[tauri::command]
@@ -121,26 +125,11 @@ pub async fn search(app: AppHandle, keyword: String, page_num: i64) -> CommandRe
 #[tauri::command(async)]
 #[specta::specta]
 pub async fn get_comic(app: AppHandle, id: i64) -> CommandResult<Comic> {
-    let manhuagui_client = app.get_manhuagui_client();
-
-    let comic = manhuagui_client
-        .get_comic(id)
+    let comic = utils::get_comic(&app, id)
         .await
         .map_err(|err| CommandError::from(&format!("获取漫画`{id}`的信息失败"), err))?;
     tracing::debug!("获取漫画信息成功");
     Ok(comic)
-}
-
-#[allow(clippy::needless_pass_by_value)]
-#[tauri::command(async)]
-#[specta::specta]
-pub fn download_chapters(app: AppHandle, chapters: Vec<ChapterInfo>) {
-    let download_manager = app.get_download_manager();
-
-    for chapter in chapters {
-        download_manager.create_download_task(chapter);
-    }
-    tracing::debug!("下载任务创建成功");
 }
 
 #[tauri::command(async)]
@@ -259,69 +248,104 @@ pub fn export_pdf(app: AppHandle, comic: Comic) -> CommandResult<()> {
 #[tauri::command(async)]
 #[specta::specta]
 pub async fn update_downloaded_comics(app: AppHandle) -> CommandResult<()> {
+    let config = app.get_config();
+    let download_manager = app.get_download_manager();
+
     // 从下载目录中获取已下载的漫画
     let downloaded_comics = get_downloaded_comics(app.clone())?;
-    // 用于存储最新的漫画信息
-    let mut latest_comics = Vec::new();
     // 发送正在获取漫画事件
     let total = downloaded_comics.len() as i64;
-    let _ = UpdateDownloadedComicsEvent::GettingComics { total }.emit(&app);
-
-    let update_get_comic_interval_sec = app.get_config().read().update_get_comic_interval_sec;
+    let interval_sec = config.read().update_get_comic_interval_sec;
+    let _ = UpdateDownloadedComicsEvent::GetComicStart { total }.emit(&app);
 
     // 获取已下载漫画的最新信息，不用并发是有意为之，防止被封IP
     for (i, downloaded_comic) in downloaded_comics.iter().enumerate() {
+        let comic_id = downloaded_comic.id;
+        let comic_title = &downloaded_comic.title;
+        let current = (i + 1) as i64;
+        let _ = UpdateDownloadedComicsEvent::GetComicProgress { current, total }.emit(&app);
         // 获取最新的漫画信息
-        let comic = get_comic(app.clone(), downloaded_comic.id).await?;
-        // 将最新的漫画信息保存到元数据文件
-        save_metadata(app.clone(), comic.clone())?;
-
-        latest_comics.push(comic);
-        // 发送获取到漫画事件
-        let current = i as i64 + 1;
-        let _ = UpdateDownloadedComicsEvent::ComicGot { current, total }.emit(&app);
-        sleep(Duration::from_secs(update_get_comic_interval_sec)).await;
-    }
-    // 至此，已下载的漫画的最新信息已获取完毕
-    let chapters_to_download = latest_comics
-        .into_iter()
-        .filter_map(|comic| {
-            // 先过滤出每个漫画中至少有一个已下载章节的组
-            let downloaded_group = comic
-                .groups
-                .into_iter()
-                .filter_map(|(group_name, chapter_infos)| {
-                    // 检查当前组是否有已下载章节，如果有，则返回组路径和章节信息，否则返回None(跳过)
-                    chapter_infos
-                        .iter()
-                        .any(|chapter_info| chapter_info.is_downloaded.unwrap_or(false))
-                        .then_some((group_name, chapter_infos))
-                })
-                .collect::<HashMap<_, _>>();
-            // 如果所有组都没有已下载章节，则跳过
-            if downloaded_group.is_empty() {
-                return None;
+        let comic = match utils::get_comic(&app, comic_id).await {
+            Ok(comic) => comic,
+            Err(err) => {
+                let err_title = format!("更新库存过程中，获取漫画`{comic_title}`失败，已跳过");
+                let err = err.context("可能是频率太高，请手动去`配置`里调整`更新库存时，每处理完一个已下载的漫画后休息`");
+                let string_chain = err.to_string_chain();
+                tracing::error!(err_title, message = string_chain);
+                sleep(Duration::from_secs(interval_sec)).await;
+                continue;
             }
-            Some(downloaded_group)
-        })
-        .flat_map(|downloaded_groups| {
-            // 从至少有一个已下载章节的组中过滤出其中未下载的章节
-            downloaded_groups
-                .into_values()
-                .flat_map(|chapter_infos| {
-                    chapter_infos
-                        .into_iter()
-                        .filter(|chapter_info| !chapter_info.is_downloaded.unwrap_or(false))
-                })
-                .collect::<Vec<_>>()
-        })
-        .collect::<Vec<_>>();
-    // 下载未下载章节
-    download_chapters(app.clone(), chapters_to_download);
-    // 发送下载任务创建完成事件
-    let _ = UpdateDownloadedComicsEvent::DownloadTaskCreated.emit(&app);
+        };
 
-    tracing::debug!("为已下载的漫画创建更新任务成功");
+        let has_downloaded_group = comic.groups.iter().any(|(_, chapter_infos)| {
+            chapter_infos
+                .iter()
+                .any(|chapter_info| chapter_info.is_downloaded.unwrap_or(false))
+        });
+
+        if !has_downloaded_group {
+            sleep(Duration::from_secs(interval_sec)).await;
+            continue;
+        }
+
+        let downloaded_groups: HashMap<&String, &Vec<ChapterInfo>> = comic
+            .groups
+            .iter()
+            .filter_map(|(group_name, chapter_infos)| {
+                chapter_infos
+                    .iter()
+                    .any(|chapter_info| chapter_info.is_downloaded.unwrap_or(false))
+                    .then_some((group_name, chapter_infos))
+            })
+            .collect();
+
+        if downloaded_groups.is_empty() {
+            sleep(Duration::from_secs(interval_sec)).await;
+            continue;
+        }
+
+        // 获取downloaded_groups中所有未下载的章节
+        let chapter_infos: Vec<&ChapterInfo> = downloaded_groups
+            .values()
+            .flat_map(|chapter_infos| {
+                chapter_infos
+                    .iter()
+                    .filter(|chapter_info| !chapter_info.is_downloaded.unwrap_or(false))
+            })
+            .collect();
+
+        if chapter_infos.is_empty() {
+            sleep(Duration::from_secs(interval_sec)).await;
+            continue;
+        }
+
+        let _ = UpdateDownloadedComicsEvent::CreateDownloadTasksStart {
+            comic_id,
+            comic_title: comic_title.clone(),
+            current: 0,
+            total: chapter_infos.len() as i64,
+        }
+        .emit(&app);
+
+        for (i, chapter_info) in chapter_infos.into_iter().enumerate() {
+            let chapter_id = chapter_info.chapter_id;
+            let current = (i + 1) as i64;
+
+            let _ = download_manager.create_download_task(comic.clone(), chapter_id);
+
+            let _ = UpdateDownloadedComicsEvent::CreateDownloadTaskProgress { comic_id, current }
+                .emit(&app);
+
+            sleep(Duration::from_millis(100)).await;
+        }
+
+        let _ = UpdateDownloadedComicsEvent::CreateDownloadTasksEnd { comic_id }.emit(&app);
+
+        sleep(Duration::from_secs(interval_sec)).await;
+    }
+
+    let _ = UpdateDownloadedComicsEvent::GetComicEnd.emit(&app);
+
     Ok(())
 }
 
@@ -352,6 +376,23 @@ pub fn show_path_in_file_manager(app: AppHandle, path: &str) -> CommandResult<()
         .context(format!("在文件管理器中打开`{path}`失败"))
         .map_err(|err| CommandError::from("在文件管理器中打开失败", err))?;
     tracing::debug!("在文件管理器中打开成功");
+    Ok(())
+}
+
+#[allow(clippy::needless_pass_by_value)]
+#[tauri::command(async)]
+#[specta::specta]
+pub fn create_download_task(app: AppHandle, comic: Comic, chapter_id: i64) -> CommandResult<()> {
+    let download_manager = app.get_download_manager();
+
+    let comic_title = comic.title.clone();
+    download_manager
+        .create_download_task(comic, chapter_id)
+        .map_err(|err| {
+            let err_title = format!("`{comic_title}`的章节ID为`{chapter_id}`的下载任务创建失败");
+            CommandError::from(&err_title, err)
+        })?;
+    tracing::debug!("下载任务创建成功");
     Ok(())
 }
 
@@ -396,4 +437,31 @@ pub fn cancel_download_task(app: AppHandle, chapter_id: i64) -> CommandResult<()
         })?;
     tracing::debug!("取消章节ID为`{chapter_id}`的下载任务成功");
     Ok(())
+}
+
+#[allow(clippy::needless_pass_by_value)]
+#[tauri::command(async)]
+#[specta::specta]
+pub fn get_synced_comic(app: AppHandle, mut comic: Comic) -> Comic {
+    comic.update_fields(&app);
+
+    comic
+}
+
+#[allow(clippy::needless_pass_by_value)]
+#[tauri::command(async)]
+#[specta::specta]
+pub fn get_synced_comic_in_favorite(app: AppHandle, mut comic: ComicInFavorite) -> ComicInFavorite {
+    comic.update_fields(&app);
+
+    comic
+}
+
+#[allow(clippy::needless_pass_by_value)]
+#[tauri::command(async)]
+#[specta::specta]
+pub fn get_synced_comic_in_search(app: AppHandle, mut comic: ComicInSearch) -> ComicInSearch {
+    comic.update_fields(&app);
+
+    comic
 }

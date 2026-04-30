@@ -25,7 +25,7 @@ use crate::{
     events::{DownloadSleepingEvent, DownloadSpeedEvent, DownloadTaskEvent},
     extensions::{AnyhowErrorToStringChain, AppHandleExt},
     manhuagui_client::ManhuaguiClient,
-    types::ChapterInfo,
+    types::{ChapterInfo, Comic},
 };
 
 /// 用于管理下载任务
@@ -66,20 +66,23 @@ impl DownloadManager {
         manager
     }
 
-    pub fn create_download_task(&self, chapter_info: ChapterInfo) {
+    pub fn create_download_task(&self, comic: Comic, chapter_id: i64) -> anyhow::Result<()> {
         use DownloadTaskState::{Downloading, Paused, Pending};
-        let chapter_id = chapter_info.chapter_id;
+
         let mut tasks = self.download_tasks.write();
         if let Some(task) = tasks.get(&chapter_id) {
             // 如果任务已经存在，且状态是`Pending`、`Downloading`或`Paused`，则不创建新任务
             let state = *task.state_sender.borrow();
             if matches!(state, Pending | Downloading | Paused) {
-                return;
+                return Err(anyhow!("章节ID为`{chapter_id}`的下载任务已存在"));
             }
         }
-        let task = DownloadTask::new(self.app.clone(), chapter_info);
+        tasks.remove(&chapter_id);
+        let task = DownloadTask::new(self.app.clone(), comic, chapter_id)
+            .context("DownloadTask创建失败")?;
         tauri::async_runtime::spawn(task.clone().process());
         tasks.insert(chapter_id, task);
+        Ok(())
     }
 
     pub fn pause_download_task(&self, chapter_id: i64) -> anyhow::Result<()> {
@@ -92,26 +95,11 @@ impl DownloadManager {
     }
 
     pub fn resume_download_task(&self, chapter_id: i64) -> anyhow::Result<()> {
-        use DownloadTaskState::{Cancelled, Completed, Failed, Pending};
-        let chapter_info = {
-            let tasks = self.download_tasks.read();
-            let Some(task) = tasks.get(&chapter_id) else {
-                return Err(anyhow!("未找到章节ID为`{chapter_id}`的下载任务"));
-            };
-
-            let state = *task.state_sender.borrow();
-            if matches!(state, Failed | Cancelled | Completed) {
-                // 如果任务状态是`Failed`、`Cancelled`或`Completed`，则获取 chapter_info 后重新创建任务
-                Some(task.chapter_info.as_ref().clone())
-            } else {
-                task.set_state(Pending);
-                None
-            }
+        let tasks = self.download_tasks.read();
+        let Some(task) = tasks.get(&chapter_id) else {
+            return Err(anyhow!("未找到章节ID为`{chapter_id}`的下载任务"));
         };
-        // 如果 chapter_info 不为 None，则重新创建任务
-        if let Some(chapter_info) = chapter_info {
-            self.create_download_task(chapter_info);
-        }
+        task.set_state(DownloadTaskState::Pending);
         Ok(())
     }
 
@@ -154,6 +142,7 @@ pub enum DownloadTaskState {
 struct DownloadTask {
     app: AppHandle,
     download_manager: DownloadManager,
+    comic: Arc<Comic>,
     chapter_info: Arc<ChapterInfo>,
     state_sender: watch::Sender<DownloadTaskState>,
     downloaded_img_count: Arc<AtomicU32>,
@@ -161,17 +150,29 @@ struct DownloadTask {
 }
 
 impl DownloadTask {
-    pub fn new(app: AppHandle, chapter_info: ChapterInfo) -> Self {
+    pub fn new(app: AppHandle, comic: Comic, chapter_id: i64) -> anyhow::Result<Self> {
+        let chapter_info = comic
+            .groups
+            .iter()
+            .flat_map(|(_, chapter_infos)| chapter_infos.iter())
+            .find(|chapter_info| chapter_info.chapter_id == chapter_id)
+            .cloned()
+            .context(format!("未找到章节ID为`{chapter_id}`的章节信息"))?;
+
         let download_manager = app.get_download_manager().inner().clone();
         let (state_sender, _) = watch::channel(DownloadTaskState::Pending);
-        Self {
+
+        let task = Self {
             app,
             download_manager,
+            comic: Arc::new(comic),
             chapter_info: Arc::new(chapter_info),
             state_sender,
             downloaded_img_count: Arc::new(AtomicU32::new(0)),
             total_img_count: Arc::new(AtomicU32::new(0)),
-        }
+        };
+
+        Ok(task)
     }
 
     async fn process(self) {
@@ -528,6 +529,7 @@ impl DownloadTask {
     fn emit_download_task_create_event(&self) {
         let _ = DownloadTaskEvent::Create {
             state: *self.state_sender.borrow(),
+            comic: self.comic.as_ref().clone(),
             chapter_info: self.chapter_info.as_ref().clone(),
             downloaded_img_count: self.downloaded_img_count.load(Ordering::Relaxed),
             total_img_count: self.total_img_count.load(Ordering::Relaxed),

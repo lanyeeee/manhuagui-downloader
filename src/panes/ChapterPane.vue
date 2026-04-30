@@ -4,6 +4,7 @@ import { SelectionArea, SelectionEvent } from '@viselect/vue'
 import { computed, nextTick, ref, useTemplateRef, watch, watchEffect } from 'vue'
 import { useStore } from '../store.ts'
 import { DropdownOption, useMessage } from 'naive-ui'
+import { join } from '@tauri-apps/api/path'
 
 const store = useStore()
 
@@ -173,15 +174,14 @@ async function downloadChapters() {
     return
   }
   // 下载没有下载过的且已勾选的章节
-  const chaptersToDownload = currentGroup.value?.filter(
-    (c) => c.isDownloaded !== true && checkedIds.value.has(c.chapterId),
-  )
-  if (chaptersToDownload === undefined) {
+  const chapterIdsToDownload = currentGroup.value
+    ?.filter((c) => c.isDownloaded !== true && checkedIds.value.has(c.chapterId))
+    .map((c) => c.chapterId)
+  if (chapterIdsToDownload === undefined) {
     return
   }
-  await commands.downloadChapters(chaptersToDownload)
-  for (const chapterToDownload of chaptersToDownload) {
-    const chapterId = chapterToDownload.chapterId
+  for (const chapterId of chapterIdsToDownload) {
+    await commands.createDownloadTask(store.pickedComic, chapterId)
     // 将已下载的章节标记为已下载
     const chapter = currentGroup.value?.find((c) => c.chapterId === chapterId)
     if (chapter !== undefined) {
@@ -203,6 +203,18 @@ async function reloadPickedComic() {
   }
 
   store.pickedComic = result.data
+}
+
+async function showComicDownloadDirInFileManager() {
+  if (store.config === undefined || store.pickedComic === undefined) {
+    return
+  }
+
+  const comicDownloadDir = await join(store.config.downloadDir, store.pickedComic.title)
+  const result = await commands.showPathInFileManager(comicDownloadDir)
+  if (result.status === 'error') {
+    console.error(result.error)
+  }
 }
 </script>
 
@@ -257,6 +269,13 @@ async function reloadPickedComic() {
           </span>
           <span class="text-red">作者：{{ store.pickedComic.authors.join(', ') }}</span>
           <span class="text-gray">类型：{{ store.pickedComic.genres.join(' ') }}</span>
+          <n-button
+            v-if="store.pickedComic.isDownloaded"
+            class="flex mt-auto mr-auto"
+            size="tiny"
+            @click="showComicDownloadDirInFileManager">
+            打开下载目录
+          </n-button>
         </div>
       </div>
     </template>

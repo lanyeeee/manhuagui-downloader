@@ -2,6 +2,7 @@
 import { Comic, commands } from '../../../bindings.ts'
 import { computed } from 'vue'
 import { useStore } from '../../../store.ts'
+import { join } from '@tauri-apps/api/path'
 
 interface GroupInfo {
   name: string
@@ -51,6 +52,18 @@ async function exportPdf() {
     return
   }
 }
+
+async function showComicDownloadDirInFileManager() {
+  if (store.config === undefined) {
+    return
+  }
+
+  const comicDownloadDir = await join(store.config.downloadDir, props.comic.title)
+  const result = await commands.showPathInFileManager(comicDownloadDir)
+  if (result.status === 'error') {
+    console.error(result.error)
+  }
+}
 </script>
 
 <template>
@@ -74,8 +87,9 @@ async function exportPdf() {
           {{ groupInfo.name }}：{{ groupInfo.downloaded }}/{{ groupInfo.total }}
         </span>
 
-        <div class="flex ml-auto mt-auto gap-col-2">
-          <n-button size="tiny" @click="exportCbz">导出cbz</n-button>
+        <div class="flex mt-auto gap-col-2">
+          <n-button size="tiny" @click="showComicDownloadDirInFileManager">打开下载目录</n-button>
+          <n-button class="ml-auto" size="tiny" @click="exportCbz">导出cbz</n-button>
           <n-button size="tiny" @click="exportPdf">导出pdf</n-button>
         </div>
       </div>

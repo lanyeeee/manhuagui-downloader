@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { Comic, Config, UserProfile } from './bindings.ts'
+import { Comic, Config, GetFavoriteResult, SearchResult, UserProfile } from './bindings.ts'
 import { CurrentTabName, ProgressData } from './types.ts'
 import { ref } from 'vue'
 
@@ -8,6 +8,8 @@ export const useStore = defineStore('store', () => {
   const userProfile = ref<UserProfile>()
   const pickedComic = ref<Comic>()
   const currentTabName = ref<CurrentTabName>('search')
+  const searchResult = ref<SearchResult>()
+  const getFavoriteResult = ref<GetFavoriteResult>()
   const progresses = ref<Map<number, ProgressData>>(new Map())
 
   return {
@@ -15,6 +17,8 @@ export const useStore = defineStore('store', () => {
     userProfile,
     pickedComic,
     currentTabName,
+    searchResult,
+    getFavoriteResult,
     progresses,
   }
 })

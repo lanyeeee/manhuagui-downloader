@@ -39,7 +39,6 @@ pub fn run() {
             get_user_profile,
             search,
             get_comic,
-            download_chapters,
             get_favorite,
             save_metadata,
             get_downloaded_comics,
@@ -48,9 +47,13 @@ pub fn run() {
             update_downloaded_comics,
             get_logs_dir_size,
             show_path_in_file_manager,
+            create_download_task,
             pause_download_task,
             resume_download_task,
             cancel_download_task,
+            get_synced_comic,
+            get_synced_comic_in_favorite,
+            get_synced_comic_in_search,
         ])
         .events(tauri_specta::collect_events![
             DownloadSleepingEvent,

@@ -6,7 +6,7 @@ use tauri_specta::Event;
 
 use crate::{
     download_manager::DownloadTaskState,
-    types::{ChapterInfo, LogLevel},
+    types::{ChapterInfo, Comic, LogLevel},
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type, Event)]
@@ -28,6 +28,7 @@ pub enum DownloadTaskEvent {
     #[serde(rename_all = "camelCase")]
     Create {
         state: DownloadTaskState,
+        comic: Comic,
         chapter_info: ChapterInfo,
         downloaded_img_count: u32,
         total_img_count: u32,
@@ -93,13 +94,27 @@ pub enum ExportPdfEvent {
 #[serde(tag = "event", content = "data")]
 pub enum UpdateDownloadedComicsEvent {
     #[serde(rename_all = "camelCase")]
-    GettingComics { total: i64 },
+    GetComicStart { total: i64 },
 
     #[serde(rename_all = "camelCase")]
-    ComicGot { current: i64, total: i64 },
+    GetComicProgress { current: i64, total: i64 },
 
     #[serde(rename_all = "camelCase")]
-    DownloadTaskCreated,
+    CreateDownloadTasksStart {
+        comic_id: i64,
+        comic_title: String,
+        current: i64,
+        total: i64,
+    },
+
+    #[serde(rename_all = "camelCase")]
+    CreateDownloadTaskProgress { comic_id: i64, current: i64 },
+
+    #[serde(rename_all = "camelCase")]
+    CreateDownloadTasksEnd { comic_id: i64 },
+
+    #[serde(rename_all = "camelCase")]
+    GetComicEnd,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type, Event)]

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { commands } from '../bindings.ts'
 import { useStore } from '../store.ts'
+import { join } from '@tauri-apps/api/path'
 
 const store = useStore()
 
@@ -13,6 +14,7 @@ const props = defineProps<{
   comicGenres?: string[]
   comicLastUpdateTime?: string
   comicLastReadTime?: string
+  comicDownloaded: boolean
 }>()
 
 async function pickComic() {
@@ -24,6 +26,18 @@ async function pickComic() {
 
   store.pickedComic = result.data
   store.currentTabName = 'chapter'
+}
+
+async function showComicDownloadDirInFileManager() {
+  if (store.config === undefined) {
+    return
+  }
+
+  const comicDownloadDir = await join(store.config.downloadDir, props.comicTitle)
+  const result = await commands.showPathInFileManager(comicDownloadDir)
+  if (result.status === 'error') {
+    console.error(result.error)
+  }
 }
 </script>
 
@@ -45,6 +59,13 @@ async function pickComic() {
         <span v-if="comicGenres !== undefined" class="text-black">类型：{{ comicGenres.join(' ') }}</span>
         <span v-if="comicLastUpdateTime !== undefined" class="text-gray">上次更新：{{ comicLastUpdateTime }}</span>
         <span v-if="comicLastReadTime !== undefined" class="text-gray">上次阅读：{{ comicLastReadTime }}</span>
+        <n-button
+          v-if="comicDownloaded"
+          class="flex mt-auto mr-auto"
+          size="tiny"
+          @click="showComicDownloadDirInFileManager">
+          打开下载目录
+        </n-button>
       </div>
     </div>
   </n-card>

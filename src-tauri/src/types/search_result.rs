@@ -2,8 +2,9 @@ use anyhow::Context;
 use scraper::{ElementRef, Html, Selector};
 use serde::{Deserialize, Serialize};
 use specta::Type;
+use tauri::AppHandle;
 
-use crate::extensions::ToAnyhow;
+use crate::{extensions::ToAnyhow, types::Comic};
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
@@ -14,13 +15,13 @@ pub struct SearchResult {
 }
 
 impl SearchResult {
-    pub fn from_html(html: &str) -> anyhow::Result<SearchResult> {
+    pub fn from_html(app: &AppHandle, html: &str) -> anyhow::Result<SearchResult> {
         let document = Html::parse_document(html);
         let book_result_selector = Selector::parse(".book-result .cf").to_anyhow()?;
 
         let mut comics = Vec::new();
         for book_li in document.select(&book_result_selector) {
-            let comic = ComicInSearch::from_li(&book_li)?;
+            let comic = ComicInSearch::from_li(app, &book_li)?;
             comics.push(comic);
         }
 
@@ -82,10 +83,12 @@ pub struct ComicInSearch {
     aliases: Vec<String>,
     /// 简介
     intro: String,
+    /// 是否已下载
+    is_downloaded: bool,
 }
 
 impl ComicInSearch {
-    pub fn from_li(li: &ElementRef) -> anyhow::Result<ComicInSearch> {
+    pub fn from_li(app: &AppHandle, li: &ElementRef) -> anyhow::Result<ComicInSearch> {
         let book_detail_div = li
             .select(&Selector::parse(".book-detail").to_anyhow()?)
             .next()
@@ -141,7 +144,7 @@ impl ComicInSearch {
             .trim_end_matches('[')
             .to_string();
 
-        Ok(ComicInSearch {
+        let mut comic = ComicInSearch {
             id,
             title,
             subtitle,
@@ -154,7 +157,16 @@ impl ComicInSearch {
             authors,
             aliases,
             intro,
-        })
+            is_downloaded: false,
+        };
+
+        comic.update_fields(app);
+
+        Ok(comic)
+    }
+
+    pub fn update_fields(&mut self, app: &AppHandle) {
+        self.is_downloaded = Comic::get_is_downloaded(app, &self.title);
     }
 }
 

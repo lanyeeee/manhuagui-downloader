@@ -111,7 +111,7 @@ impl ManhuaguiClient {
             return Err(anyhow!("预料之外的状态码({status}): {body}"));
         }
         let search_result =
-            SearchResult::from_html(&body).context("将body转换为SearchResult失败")?;
+            SearchResult::from_html(&self.app, &body).context("将body转换为SearchResult失败")?;
         Ok(search_result)
     }
 
@@ -189,8 +189,8 @@ impl ManhuaguiClient {
             return Err(anyhow!("预料之外的状态码({status}): {body}"));
         }
         // 解析html
-        let get_favorite_result =
-            GetFavoriteResult::from_html(&body).context("将body转换为GetFavoriteResult失败")?;
+        let get_favorite_result = GetFavoriteResult::from_html(&self.app, &body)
+            .context("将body转换为GetFavoriteResult失败")?;
         Ok(get_favorite_result)
     }
 }

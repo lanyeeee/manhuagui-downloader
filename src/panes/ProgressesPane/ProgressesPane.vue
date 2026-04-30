@@ -6,6 +6,7 @@ import { commands, events } from '../../bindings.ts'
 import UncompletedProgresses from './components/UncompletedProgresses.vue'
 import CompletedProgresses from './components/CompletedProgresses.vue'
 import { useStore } from '../../store.ts'
+import { ProgressData } from '../../types.ts'
 
 const store = useStore()
 
@@ -36,7 +37,7 @@ onMounted(() => {
     })
 
   events.downloadTaskEvent
-    .listen(({ payload: { event, data } }) => {
+    .listen(async ({ payload: { event, data } }) => {
       if (event === 'Create') {
         const { chapterInfo, downloadedImgCount, totalImgCount } = data
 
@@ -57,6 +58,13 @@ onMounted(() => {
         progressData.downloadedImgCount = downloadedImgCount
         progressData.totalImgCount = totalImgCount
         progressData.percentage = (downloadedImgCount / totalImgCount) * 100
+
+        if (state === 'Completed') {
+          progressData.chapterInfo.isDownloaded = true
+          await syncPickedComic()
+          await syncComicInSearch(progressData)
+          await syncComicInFavorite(progressData)
+        }
 
         let indicator = ''
         if (state === 'Pending') {
@@ -90,6 +98,46 @@ onUnmounted(() => {
   unListenDownloadSleepingEvent?.()
   unListenDownloadTaskEvent?.()
 })
+
+async function syncPickedComic() {
+  if (store.pickedComic === undefined) {
+    return
+  }
+
+  const syncedComic = await commands.getSyncedComic(store.pickedComic)
+
+  Object.assign(store.pickedComic, { ...syncedComic })
+}
+
+async function syncComicInSearch(progressData: ProgressData) {
+  if (store.searchResult === undefined) {
+    return
+  }
+
+  const comic = store.searchResult.comics.find((comic) => comic.id === progressData.comic.id)
+  if (comic === undefined) {
+    return
+  }
+
+  const syncedComic = await commands.getSyncedComicInSearch(comic)
+
+  Object.assign(comic, { ...syncedComic })
+}
+
+async function syncComicInFavorite(progressData: ProgressData) {
+  if (store.getFavoriteResult === undefined) {
+    return
+  }
+
+  const comic = store.getFavoriteResult.comics.find((comic) => comic.id === progressData.comic.id)
+  if (comic === undefined) {
+    return
+  }
+
+  const syncedComic = await commands.getSyncedComicInFavorite(comic)
+
+  Object.assign(comic, { ...syncedComic })
+}
 
 async function selectDownloadDir() {
   if (store.config === undefined) {

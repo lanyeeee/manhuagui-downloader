@@ -77,7 +77,7 @@ async function showConfigPathInFileManager() {
             </n-input-group>
           </div>
           <n-input-group class="whitespace-nowrap">
-            <n-input-group-label size="small">更新库存时，每获取一个已下载漫画的最新数据后休息</n-input-group-label>
+            <n-input-group-label size="small">更新库存时，每处理完一个已下载的漫画后休息</n-input-group-label>
             <n-input-number
               placeholder=""
               class="w-full"

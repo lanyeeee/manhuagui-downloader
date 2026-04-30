@@ -2,8 +2,9 @@ use anyhow::Context;
 use scraper::{ElementRef, Html, Selector};
 use serde::{Deserialize, Serialize};
 use specta::Type;
+use tauri::AppHandle;
 
-use crate::extensions::ToAnyhow;
+use crate::{extensions::ToAnyhow, types::Comic};
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
@@ -14,11 +15,11 @@ pub struct GetFavoriteResult {
 }
 
 impl GetFavoriteResult {
-    pub fn from_html(html: &str) -> anyhow::Result<GetFavoriteResult> {
+    pub fn from_html(app: &AppHandle, html: &str) -> anyhow::Result<GetFavoriteResult> {
         let document = Html::parse_document(html);
         let mut comics = Vec::new();
         for book_div in document.select(&Selector::parse(".dy_content_li").to_anyhow()?) {
-            let comic = ComicInFavorite::from_div(&book_div)?;
+            let comic = ComicInFavorite::from_div(app, &book_div)?;
             comics.push(comic);
         }
 
@@ -76,10 +77,12 @@ pub struct ComicInFavorite {
     /// - 2024-12-13
     /// - x分钟前
     last_read: String,
+    /// 是否已下载
+    is_downloaded: bool,
 }
 
 impl ComicInFavorite {
-    pub fn from_div(div: &ElementRef) -> anyhow::Result<ComicInFavorite> {
+    pub fn from_div(app: &AppHandle, div: &ElementRef) -> anyhow::Result<ComicInFavorite> {
         let a = div
             .select(&Selector::parse(".dy_content_li h3 > a").to_anyhow()?)
             .next()
@@ -130,12 +133,21 @@ impl ComicInFavorite {
             .trim()
             .to_string();
 
-        Ok(ComicInFavorite {
+        let mut comic = ComicInFavorite {
             id,
             title,
             cover,
             last_update,
             last_read,
-        })
+            is_downloaded: false,
+        };
+
+        comic.update_fields(app);
+
+        Ok(comic)
+    }
+
+    pub fn update_fields(&mut self, app: &AppHandle) {
+        self.is_downloaded = Comic::get_is_downloaded(app, &self.title);
     }
 }

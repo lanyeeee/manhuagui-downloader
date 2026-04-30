@@ -65,8 +65,18 @@ async function onProgressDoubleClick(state: DownloadTaskState, chapterId: number
     if (result.status === 'error') {
       console.error(result.error)
     }
-  } else {
+  } else if (state === 'Paused') {
     const result = await commands.resumeDownloadTask(chapterId)
+    if (result.status === 'error') {
+      console.error(result.error)
+    }
+  } else {
+    const progressData = store.progresses.get(chapterId)
+    if (progressData === undefined) {
+      return
+    }
+    const { comic } = progressData
+    const result = await commands.createDownloadTask(comic, chapterId)
     if (result.status === 'error') {
       console.error(result.error)
     }
@@ -118,6 +128,19 @@ function useDropdown() {
       props: {
         onClick: () => {
           selectedIds.value.forEach(async (chapterId) => {
+            const progressData = store.progresses.get(chapterId)
+            if (progressData === undefined) {
+              return
+            }
+            const { state, comic } = progressData
+            if (state === 'Cancelled' || state === 'Completed' || state === 'Failed') {
+              const result = await commands.createDownloadTask(comic, chapterId)
+              if (result.status === 'error') {
+                console.error(result.error)
+              }
+              return
+            }
+
             const result = await commands.resumeDownloadTask(chapterId)
             if (result.status === 'error') {
               console.error(result.error)

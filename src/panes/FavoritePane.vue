@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { commands, GetFavoriteResult } from '../bindings.ts'
+import { commands } from '../bindings.ts'
 import ComicCard from '../components/ComicCard.vue'
 import { computed, ref, watch } from 'vue'
 import { useStore } from '../store.ts'
@@ -7,14 +7,13 @@ import { useStore } from '../store.ts'
 const store = useStore()
 
 const currentPage = ref<number>(1)
-const getFavoriteResult = ref<GetFavoriteResult>()
 
 const pageCount = computed(() => {
   const PAGE_SIZE = 20
-  if (getFavoriteResult.value === undefined) {
+  if (store.getFavoriteResult === undefined) {
     return 1
   }
-  return Math.ceil(getFavoriteResult.value.total / PAGE_SIZE)
+  return Math.ceil(store.getFavoriteResult.total / PAGE_SIZE)
 })
 
 async function getFavourite(pageNum: number) {
@@ -26,14 +25,14 @@ async function getFavourite(pageNum: number) {
     return
   }
 
-  getFavoriteResult.value = result.data
+  store.getFavoriteResult = result.data
 }
 
 watch(
   () => store.userProfile,
   async () => {
     if (store.userProfile === undefined) {
-      getFavoriteResult.value = undefined
+      store.getFavoriteResult = undefined
       return
     }
     await getFavourite(1)
@@ -44,16 +43,17 @@ watch(
 
 <template>
   <div class="h-full flex flex-col">
-    <div v-if="getFavoriteResult !== undefined" class="h-full flex flex-col gap-row-1 overflow-auto">
+    <div v-if="store.getFavoriteResult !== undefined" class="h-full flex flex-col gap-row-1 overflow-auto">
       <div class="h-full flex flex-col gap-row-2 overflow-auto p-2">
         <ComicCard
-          v-for="comic in getFavoriteResult.comics"
+          v-for="comic in store.getFavoriteResult.comics"
           :key="comic.id"
           :comicId="comic.id"
           :comicTitle="comic.title"
           :comicCover="comic.cover"
           :comicLastUpdateTime="comic.lastUpdate"
-          :comicLastReadTime="comic.lastRead" />
+          :comicLastReadTime="comic.lastRead"
+          :comic-downloaded="comic.isDownloaded" />
       </div>
       <n-pagination
         class="p-2 mt-auto"
