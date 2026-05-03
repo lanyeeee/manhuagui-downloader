@@ -174,12 +174,6 @@ async function downloadCheckedChapters() {
     message.error('请先选择漫画')
     return
   }
-  // 创建下载任务前，先创建元数据
-  const saveMetadataResult = await commands.saveMetadata(store.pickedComic)
-  if (saveMetadataResult.status === 'error') {
-    console.error(saveMetadataResult.error)
-    return
-  }
   // 下载没有下载过的且已勾选的章节
   const chapterIdsToDownload = currentGroup.value
     ?.filter((c) => !isDownloadedChapter(c) && checkedIds.value.has(c.chapterId))

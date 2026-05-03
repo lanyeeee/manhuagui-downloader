@@ -40,7 +40,6 @@ pub fn run() {
             search,
             get_comic,
             get_favorite,
-            save_metadata,
             get_downloaded_comics,
             export_cbz,
             export_pdf,
