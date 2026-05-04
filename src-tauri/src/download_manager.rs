@@ -636,6 +636,25 @@ impl DownloadImgTask {
         let group_name = &self.chapter_info.group_name;
         let chapter_title = &self.chapter_info.chapter_title;
 
+        if save_path.exists() {
+            // 如果图片已经存在，则直接跳过下载
+            self.download_task
+                .downloaded_img_count
+                .fetch_add(1, Ordering::Relaxed);
+
+            self.download_task.emit_download_task_update_event();
+
+            tracing::trace!(
+                chapter_id,
+                comic_title,
+                group_name,
+                chapter_title,
+                url,
+                "图片已存在，跳过下载"
+            );
+            return;
+        }
+
         tracing::trace!(
             chapter_id,
             comic_title,
