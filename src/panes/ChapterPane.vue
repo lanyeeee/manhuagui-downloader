@@ -1,32 +1,25 @@
-<script setup lang="ts">
+<script setup lang="tsx">
 import { ChapterInfo, commands, DownloadTaskState } from '../bindings.ts'
 import { PartialSelectionOptions, SelectionArea, SelectionEvent } from '@viselect/vue'
-import { computed, nextTick, ref, useTemplateRef, watch, watchEffect } from 'vue'
+import { computed, defineComponent, nextTick, PropType, ref, useTemplateRef, watch, watchEffect } from 'vue'
 import { useStore } from '../store.ts'
 import { DropdownOption, NCheckbox, useMessage } from 'naive-ui'
 import { join } from '@tauri-apps/api/path'
 
-type State = DownloadTaskState | 'Idle'
-type ChapterInfoWithState = ChapterInfo & { state: State }
+export type State = DownloadTaskState | 'Idle'
 
 const store = useStore()
 
 const message = useMessage()
 
 // 按章节数排序的分组
-const sortedGroups = computed<[string, ChapterInfoWithState[]][] | undefined>(() => {
+const sortedGroups = computed<[string, ChapterInfo[]][] | undefined>(() => {
   if (store.pickedComic === undefined) {
     return undefined
   }
 
   return Object.entries(store.pickedComic.groups)
-    .map(([groupPath, chapters]): [string, ChapterInfoWithState[]] => [
-      groupPath,
-      chapters.map((chapter) => {
-        const progressData = store.progresses.get(chapter.chapterId)
-        return { ...chapter, state: progressData?.state ?? 'Idle' }
-      }),
-    ])
+
     .sort((a, b) => b[1].length - a[1].length)
 })
 // 第一个group的名字
@@ -34,12 +27,7 @@ const firstGroupName = computed(() => sortedGroups.value?.[0]?.[0] ?? '单话')
 // 当前tab的分组名
 const currentGroupName = ref<string>(firstGroupName.value)
 // 当前tab对应的group
-const currentGroup = computed<ChapterInfoWithState[] | undefined>(() =>
-  store.pickedComic?.groups[currentGroupName.value].map((chapter) => {
-    const progressData = store.progresses.get(chapter.chapterId)
-    return { ...chapter, state: progressData?.state ?? 'Idle' }
-  }),
-)
+const currentGroup = computed<ChapterInfo[] | undefined>(() => store.pickedComic?.groups[currentGroupName.value])
 // SelectionArea的配置
 const selectionOptions: PartialSelectionOptions = {
   selectables: '.selectable',
@@ -50,11 +38,6 @@ const selectionOptions: PartialSelectionOptions = {
 const selectionAreaRef = useTemplateRef('selectionAreaRef')
 // 已勾选的章节id
 const checkedIds = ref<Set<number>>(new Set())
-// 用于<n-checkbox-group>
-const checkedIdsArray = computed<number[]>({
-  get: () => [...checkedIds.value],
-  set: (next) => (checkedIds.value = new Set(next)),
-})
 // 已选中(被框选选到)的章节id
 const selectedIds = ref<Set<number>>(new Set())
 // 如果漫画变了，清空勾选和选中状态
@@ -80,8 +63,17 @@ watchEffect(() => {
       .map((c) => c.chapterId),
   )
 
-  checkedIds.value = new Set([...checkedIds.value].filter((id) => selectableChapterIds.has(id)))
-  selectedIds.value = new Set([...selectedIds.value].filter((id) => selectableChapterIds.has(id)))
+  for (const id of checkedIds.value) {
+    if (!selectableChapterIds.has(id)) {
+      checkedIds.value.delete(id)
+    }
+  }
+
+  for (const id of selectedIds.value) {
+    if (!selectableChapterIds.has(id)) {
+      selectedIds.value.delete(id)
+    }
+  }
 })
 
 // 提取章节id
@@ -213,18 +205,57 @@ async function showComicDownloadDirInFileManager() {
   }
 }
 
-function isDownloadingChapter(chapter: ChapterInfoWithState) {
-  const state = chapter.state
+function getChapterState(chapter: ChapterInfo): State {
+  return store.progresses.get(chapter.chapterId)?.state ?? 'Idle'
+}
+
+function isDownloadingChapter(chapter: ChapterInfo) {
+  const state = getChapterState(chapter)
   return state === 'Pending' || state === 'Downloading' || state === 'Paused'
 }
 
-function isDownloadedChapter(chapter: ChapterInfoWithState) {
+function isDownloadedChapter(chapter: ChapterInfo) {
   return chapter.isDownloaded === true
 }
 
-function isSelectableChapter(chapter: ChapterInfoWithState) {
+function isSelectableChapter(chapter: ChapterInfo) {
   return !isDownloadedChapter(chapter) && !isDownloadingChapter(chapter)
 }
+
+const ChapterCheckbox = defineComponent({
+  name: 'ChapterCheckbox',
+  props: {
+    chapter: {
+      type: Object as PropType<ChapterInfo>,
+      required: true,
+    },
+  },
+  setup: (props) => {
+    return () => (
+      <NCheckbox
+        class={[
+          'hover:bg-gray-200!',
+          {
+            selectable: isSelectableChapter(props.chapter),
+            selected: selectedIds.value.has(props.chapter.chapterId),
+            downloaded: isDownloadedChapter(props.chapter),
+            downloading: !isDownloadedChapter(props.chapter) && isDownloadingChapter(props.chapter),
+          },
+        ]}
+        checked={checkedIds.value.has(props.chapter.chapterId)}
+        onUpdate:checked={(checked: boolean) => {
+          if (checked) {
+            checkedIds.value.add(props.chapter.chapterId)
+          } else {
+            checkedIds.value.delete(props.chapter.chapterId)
+          }
+        }}
+        label={props.chapter.chapterTitle}
+        disabled={!isSelectableChapter(props.chapter)}
+      />
+    )
+  },
+})
 </script>
 
 <template>
@@ -251,22 +282,13 @@ function isSelectableChapter(chapter: ChapterInfoWithState) {
           :tab="groupName"
           class="overflow-auto p-0! h-full">
           <div class="chapter-pane-selection-container box-border p-2 overflow-auto h-full" @contextmenu="showDropdown">
-            <n-checkbox-group v-model:value="checkedIdsArray" class="grid grid-cols-3 gap-1.5 w-full">
-              <n-checkbox
+            <div class="grid grid-cols-3 gap-1.5 w-full">
+              <ChapterCheckbox
                 v-for="chapter in chapters"
                 :key="chapter.chapterId"
                 :data-key="chapter.chapterId"
-                class="hover:bg-gray-200!"
-                :value="chapter.chapterId"
-                :label="chapter.chapterTitle"
-                :disabled="!isSelectableChapter(chapter)"
-                :class="{
-                  selectable: isSelectableChapter(chapter),
-                  selected: selectedIds.has(chapter.chapterId),
-                  downloaded: isDownloadedChapter(chapter),
-                  downloading: !isDownloadedChapter(chapter) && isDownloadingChapter(chapter),
-                }" />
-            </n-checkbox-group>
+                :chapter="chapter" />
+            </div>
           </div>
         </n-tab-pane>
       </n-tabs>
@@ -298,7 +320,7 @@ function isSelectableChapter(chapter: ChapterInfoWithState) {
       :y="dropdownY"
       :options="dropdownOptions"
       :show="dropdownShowing"
-      @clickoutside="dropdownShowing = false" />
+      @clickoutside="() => (dropdownShowing = false)" />
   </div>
 </template>
 
