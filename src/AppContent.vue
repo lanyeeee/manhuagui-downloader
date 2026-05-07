@@ -10,7 +10,18 @@ import LogDialog from './dialogs/LogDialog.vue'
 import AboutDialog from './dialogs/AboutDialog.vue'
 import SettingsDialog from './dialogs/SettingsDialog.vue'
 import { onMounted, ref, watch } from 'vue'
-import { useMessage, useNotification } from 'naive-ui'
+import {
+  NAvatar,
+  NButton,
+  NIcon,
+  NInput,
+  NInputGroup,
+  NInputGroupLabel,
+  NTabPane,
+  NTabs,
+  useMessage,
+  useNotification,
+} from 'naive-ui'
 import { useStore } from './store.ts'
 import { PhClockCounterClockwise, PhGearSix, PhInfo, PhUser } from '@phosphor-icons/vue'
 
@@ -116,7 +127,7 @@ onMounted(async () => {
       </n-input-group>
 
       <div v-if="store.userProfile !== undefined" class="flex items-center">
-        <NAvatar :src="store.userProfile.avatar" round />
+        <n-avatar :src="store.userProfile.avatar" round />
         <span class="whitespace-nowrap">{{ store.userProfile.username }}</span>
       </div>
     </div>

@@ -4,7 +4,16 @@ import DownloadedComicCard from './components/DownloadedComicCard.vue'
 import { open } from '@tauri-apps/plugin-dialog'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useStore } from '../../store.ts'
-import { MessageReactive, useMessage } from 'naive-ui'
+import {
+  MessageReactive,
+  NButton,
+  NIcon,
+  NInput,
+  NInputGroup,
+  NInputGroupLabel,
+  NPagination,
+  useMessage,
+} from 'naive-ui'
 import { PhFolderOpen } from '@phosphor-icons/vue'
 import UpdateDownloadedComicsButton from './components/UpdateDownloadedComicsButton.vue'
 

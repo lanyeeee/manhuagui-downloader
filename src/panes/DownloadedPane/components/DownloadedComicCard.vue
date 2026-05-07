@@ -3,6 +3,7 @@ import { Comic, commands } from '../../../bindings.ts'
 import { computed } from 'vue'
 import { useStore } from '../../../store.ts'
 import { join } from '@tauri-apps/api/path'
+import { NButton, NCard } from 'naive-ui'
 
 interface GroupInfo {
   name: string

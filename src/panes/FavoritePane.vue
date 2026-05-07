@@ -3,6 +3,7 @@ import { commands } from '../bindings.ts'
 import ComicCard from '../components/ComicCard.vue'
 import { computed, ref, watch } from 'vue'
 import { useStore } from '../store.ts'
+import { NPagination } from 'naive-ui'
 
 const store = useStore()
 

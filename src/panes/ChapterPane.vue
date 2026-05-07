@@ -3,7 +3,7 @@ import { ChapterInfo, commands, DownloadTaskState } from '../bindings.ts'
 import { PartialSelectionOptions, SelectionArea, SelectionEvent } from '@viselect/vue'
 import { computed, defineComponent, nextTick, PropType, ref, useTemplateRef, watch, watchEffect } from 'vue'
 import { useStore } from '../store.ts'
-import { DropdownOption, NCheckbox, useMessage } from 'naive-ui'
+import { DropdownOption, NButton, NCheckbox, NDropdown, NEmpty, NTabPane, NTabs, useMessage } from 'naive-ui'
 import { join } from '@tauri-apps/api/path'
 
 export type State = DownloadTaskState | 'Idle'

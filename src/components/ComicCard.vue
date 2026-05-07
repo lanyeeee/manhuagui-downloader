@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { NButton, NCard } from 'naive-ui'
 import { commands } from '../bindings.ts'
 import { useStore } from '../store.ts'
 import { join } from '@tauri-apps/api/path'

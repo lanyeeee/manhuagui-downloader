@@ -3,7 +3,18 @@ import { commands } from '../bindings.ts'
 import { path } from '@tauri-apps/api'
 import { appDataDir } from '@tauri-apps/api/path'
 import { useStore } from '../store.ts'
-import { useMessage } from 'naive-ui'
+import {
+  NButton,
+  NDialog,
+  NInput,
+  NInputGroup,
+  NInputGroupLabel,
+  NInputNumber,
+  NModal,
+  NRadioButton,
+  NRadioGroup,
+  useMessage,
+} from 'naive-ui'
 import { ref } from 'vue'
 
 const store = useStore()

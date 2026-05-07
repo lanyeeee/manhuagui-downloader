@@ -7,6 +7,7 @@ import UncompletedProgresses from './components/UncompletedProgresses.vue'
 import CompletedProgresses from './components/CompletedProgresses.vue'
 import { useStore } from '../../store.ts'
 import { ProgressData } from '../../types.ts'
+import { NButton, NIcon, NInput, NInputGroup, NInputGroupLabel, NTabPane, NTabs } from 'naive-ui'
 
 const store = useStore()
 

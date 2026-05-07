@@ -2,7 +2,7 @@
 import { commands } from '../bindings.ts'
 import ComicCard from '../components/ComicCard.vue'
 import FloatLabelInput from '../components/FloatLabelInput.vue'
-import { useMessage } from 'naive-ui'
+import { NButton, NIcon, NInputGroup, NPagination, useMessage } from 'naive-ui'
 import { PhArrowRight, PhMagnifyingGlass } from '@phosphor-icons/vue'
 import { computed, ref } from 'vue'
 import { useStore } from '../store.ts'

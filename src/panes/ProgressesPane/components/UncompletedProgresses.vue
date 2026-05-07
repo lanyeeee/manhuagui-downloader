@@ -1,6 +1,6 @@
 <script setup lang="tsx">
 import { computed, defineComponent, nextTick, PropType, ref, useTemplateRef, watchEffect } from 'vue'
-import { DropdownOption, NIcon, NProgress, ProgressProps } from 'naive-ui'
+import { DropdownOption, NDropdown, NIcon, NProgress, ProgressProps } from 'naive-ui'
 import { PartialSelectionOptions, SelectionArea, SelectionEvent } from '@viselect/vue'
 import {
   PhCaretRight,
