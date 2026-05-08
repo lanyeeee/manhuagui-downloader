@@ -1,10 +1,12 @@
+use std::{collections::HashMap, path::PathBuf};
+
 use anyhow::Context;
 use scraper::{ElementRef, Html, Selector};
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use tauri::AppHandle;
 
-use crate::{extensions::ToAnyhow, types::Comic};
+use crate::{extensions::ToAnyhow, utils};
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
@@ -16,10 +18,13 @@ pub struct GetFavoriteResult {
 
 impl GetFavoriteResult {
     pub fn from_html(app: &AppHandle, html: &str) -> anyhow::Result<GetFavoriteResult> {
+        let id_to_dir_map =
+            utils::create_id_to_dir_map(app).context("创建漫画ID到下载目录映射失败")?;
+
         let document = Html::parse_document(html);
         let mut comics = Vec::new();
         for book_div in document.select(&Selector::parse(".dy_content_li").to_anyhow()?) {
-            let comic = ComicInFavorite::from_div(app, &book_div)?;
+            let comic = ComicInFavorite::from_div(&book_div, &id_to_dir_map)?;
             comics.push(comic);
         }
 
@@ -64,25 +69,30 @@ impl GetFavoriteResult {
 #[serde(rename_all = "camelCase")]
 pub struct ComicInFavorite {
     /// 漫画id
-    id: i64,
+    pub id: i64,
     /// 漫画标题
-    title: String,
+    pub title: String,
     /// 漫画封面链接
-    cover: String,
+    pub cover: String,
     /// 最近更新时间，两种格式
     /// - 2024-12-13
     /// - x分钟前
-    last_update: String,
+    pub last_update: String,
     /// 上次阅读时间，两种格式
     /// - 2024-12-13
     /// - x分钟前
-    last_read: String,
+    pub last_read: String,
     /// 是否已下载
-    is_downloaded: bool,
+    pub is_downloaded: bool,
+    /// 漫画的下载目录
+    pub comic_download_dir: PathBuf,
 }
 
 impl ComicInFavorite {
-    pub fn from_div(app: &AppHandle, div: &ElementRef) -> anyhow::Result<ComicInFavorite> {
+    pub fn from_div(
+        div: &ElementRef,
+        id_to_dir_map: &HashMap<i64, PathBuf>,
+    ) -> anyhow::Result<ComicInFavorite> {
         let a = div
             .select(&Selector::parse(".dy_content_li h3 > a").to_anyhow()?)
             .next()
@@ -140,14 +150,18 @@ impl ComicInFavorite {
             last_update,
             last_read,
             is_downloaded: false,
+            comic_download_dir: PathBuf::new(),
         };
 
-        comic.update_fields(app);
+        comic.update_fields(id_to_dir_map);
 
         Ok(comic)
     }
 
-    pub fn update_fields(&mut self, app: &AppHandle) {
-        self.is_downloaded = Comic::get_is_downloaded(app, &self.title);
+    pub fn update_fields(&mut self, id_to_dir_map: &HashMap<i64, PathBuf>) {
+        if let Some(comic_download_dir) = id_to_dir_map.get(&self.id) {
+            self.comic_download_dir = comic_download_dir.clone();
+            self.is_downloaded = true;
+        }
     }
 }

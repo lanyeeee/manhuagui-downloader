@@ -1,15 +1,19 @@
-use std::{collections::HashMap, path::Path};
+use std::{
+    collections::{HashMap, HashSet},
+    path::{Path, PathBuf},
+};
 
 use anyhow::{anyhow, Context};
 use scraper::{ElementRef, Html, Selector};
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use tauri::AppHandle;
+use walkdir::WalkDir;
 
 use crate::{
-    extensions::{AppHandleExt, ToAnyhow},
+    extensions::{AppHandleExt, ToAnyhow, WalkDirEntryExt},
     types::ChapterInfo,
-    utils::filename_filter,
+    utils::{self, filename_filter},
 };
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
@@ -45,9 +49,12 @@ pub struct Comic {
     /// 是否已下载
     #[serde(skip_serializing_if = "Option::is_none")]
     pub is_downloaded: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub comic_download_dir: Option<PathBuf>,
 }
 
 impl Comic {
+    #[allow(clippy::too_many_lines)]
     pub fn from_html(app: &AppHandle, html: &str) -> anyhow::Result<Comic> {
         let document = Html::parse_document(html);
 
@@ -132,14 +139,14 @@ impl Comic {
             .to_string();
 
         let groups = if let Some(fragment) = hidden_fragment {
-            get_groups(app, &fragment.root_element(), id, &title, &status)?
+            get_groups(&fragment.root_element(), id, &title, &status)?
         } else {
             let chapter_div = document
                 .select(&Selector::parse(".chapter").to_anyhow()?)
                 .next()
                 .context("没有找到章节列表的<div>")?;
 
-            get_groups(app, &chapter_div, id, &title, &status)?
+            get_groups(&chapter_div, id, &title, &status)?
         };
 
         let mut comic = Comic {
@@ -157,14 +164,27 @@ impl Comic {
             intro,
             groups,
             is_downloaded: None,
+            comic_download_dir: None,
         };
 
-        comic.update_fields(app);
+        let id_to_dir_map =
+            utils::create_id_to_dir_map(app).context("创建漫画路径词到下载目录映射失败")?;
+
+        // TODO: 这是为了兼容v0.4.2及之前的版本，后续需要移除，计划在v0.6.0之后移除
+        if let Some(comic_download_dir) = id_to_dir_map.get(&comic.id) {
+            comic
+                .create_chapter_metadata_for_old_version(comic_download_dir)
+                .context("为旧版本创建章节元数据失败")?;
+        }
+
+        comic
+            .update_fields(&id_to_dir_map)
+            .context(format!("`{}`更新Comic的字段失败", comic.title))?;
 
         Ok(comic)
     }
 
-    pub fn from_metadata(app: &AppHandle, metadata_path: &Path) -> anyhow::Result<Comic> {
+    pub fn from_metadata(metadata_path: &Path) -> anyhow::Result<Comic> {
         let comic_json = std::fs::read_to_string(metadata_path).context(format!(
             "从元数据转为Comic失败，读取元数据文件`{}`失败",
             metadata_path.display()
@@ -173,40 +193,194 @@ impl Comic {
             "从元数据转为Comic失败，将`{}`反序列化为Comic失败",
             metadata_path.display()
         ))?;
-        // 这个comic中的is_downloaded字段是None，需要重新计算
+        let parent = metadata_path
+            .parent()
+            .context(format!("`{}`没有父目录", metadata_path.display()))?;
+        let comic_download_dir = parent.to_path_buf();
+
+        // TODO: 这是为了兼容v0.4.2及之前的版本，后续需要移除，计划在v0.6.0之后移除
+        comic
+            .create_chapter_metadata_for_old_version(&comic_download_dir)
+            .context("为旧版本创建章节元数据失败")?;
+
+        comic.comic_download_dir = Some(comic_download_dir);
         comic.is_downloaded = Some(true);
-        comic.update_chapter_infos_fields(app);
+
+        // 来自元数据的章节信息没有`chapter_download_dir`和`is_downloaded`字段，需要更新
+        comic
+            .update_chapter_infos_fields()
+            .context("更新章节信息字段失败")?;
+
         Ok(comic)
     }
 
-    pub fn update_fields(&mut self, app: &AppHandle) {
-        self.is_downloaded = Some(Comic::get_is_downloaded(app, &self.title));
-        self.update_chapter_infos_fields(app);
+    pub fn update_fields(&mut self, id_to_dir_map: &HashMap<i64, PathBuf>) -> anyhow::Result<()> {
+        if let Some(comic_download_dir) = id_to_dir_map.get(&self.id) {
+            self.comic_download_dir = Some(comic_download_dir.clone());
+            self.is_downloaded = Some(true);
+
+            self.update_chapter_infos_fields()
+                .context("更新章节信息字段失败")?;
+        }
+
+        Ok(())
     }
 
-    fn update_chapter_infos_fields(&mut self, app: &AppHandle) {
-        for chapter_infos in self.groups.values_mut() {
-            for chapter_info in chapter_infos.iter_mut() {
-                let comic_title = &self.title;
-                let group_name = &chapter_info.group_name;
-                let prefixed_chapter_title = &chapter_info.prefixed_chapter_title;
-                let is_downloaded = ChapterInfo::get_is_downloaded(
-                    app,
-                    comic_title,
-                    group_name,
-                    prefixed_chapter_title,
-                );
-                chapter_info.is_downloaded = Some(is_downloaded);
+    fn update_chapter_infos_fields(&mut self) -> anyhow::Result<()> {
+        let Some(comic_download_dir) = &self.comic_download_dir else {
+            return Err(anyhow!("`comic_download_dir`字段为`None`"));
+        };
+
+        if !comic_download_dir.exists() {
+            return Ok(());
+        }
+
+        for entry in WalkDir::new(comic_download_dir)
+            .into_iter()
+            .filter_map(Result::ok)
+        {
+            if !entry.is_chapter_metadata() {
+                continue;
+            }
+
+            let metadata_path = entry.path();
+
+            let metadata_str = std::fs::read_to_string(metadata_path)
+                .context(format!("读取`{}`失败", metadata_path.display()))?;
+
+            let chapter_json: serde_json::Value =
+                serde_json::from_str(&metadata_str).context(format!(
+                    "将`{}`反序列化为serde_json::Value失败",
+                    metadata_path.display()
+                ))?;
+
+            let chapter_id = chapter_json
+                .get("chapterId")
+                .and_then(serde_json::Value::as_i64)
+                .context(format!("`{}`没有`chapterId`字段", metadata_path.display()))?;
+
+            let group_name = chapter_json
+                .get("groupName")
+                .and_then(|word| word.as_str())
+                .context(format!("`{}`没有`groupName`字段", metadata_path.display()))?
+                .to_string();
+
+            let Some(group) = self.groups.get_mut(&group_name) else {
+                continue;
+            };
+
+            if let Some(chapter_info) = group
+                .iter_mut()
+                .find(|chapter| chapter.chapter_id == chapter_id)
+            {
+                let parent = metadata_path
+                    .parent()
+                    .context(format!("`{}`没有父目录", metadata_path.display()))?;
+                chapter_info.chapter_download_dir = Some(parent.to_path_buf());
+                chapter_info.is_downloaded = Some(true);
             }
         }
+
+        Ok(())
     }
 
-    pub fn get_is_downloaded(app: &AppHandle, comic_title: &str) -> bool {
-        app.get_config()
-            .read()
-            .download_dir
-            .join(comic_title)
-            .exists()
+    pub fn save_metadata(&self) -> anyhow::Result<()> {
+        let mut comic = self.clone();
+        // 将所有的is_downloaded字段设置为None，这样能使is_downloaded字段在序列化时被忽略
+        comic.is_downloaded = None;
+        for chapter_infos in comic.groups.values_mut() {
+            for chapter_info in chapter_infos.iter_mut() {
+                chapter_info.is_downloaded = None;
+            }
+        }
+
+        let comic_download_dir = self
+            .comic_download_dir
+            .as_ref()
+            .context("`comic_download_dir`字段为`None`")?;
+        let metadata_path = comic_download_dir.join("元数据.json");
+
+        std::fs::create_dir_all(comic_download_dir)
+            .context(format!("创建目录`{}`失败", comic_download_dir.display()))?;
+
+        let comic_json = serde_json::to_string_pretty(&comic).context("将Comic序列化为json失败")?;
+
+        std::fs::write(&metadata_path, comic_json)
+            .context(format!("写入文件`{}`失败", metadata_path.display()))?;
+
+        Ok(())
+    }
+
+    pub fn get_comic_export_dir(&self, app: &AppHandle) -> anyhow::Result<PathBuf> {
+        let (download_dir, export_dir) = {
+            let config = app.get_config();
+            let config = config.read();
+            (config.download_dir.clone(), config.export_dir.clone())
+        };
+
+        let Some(comic_download_dir) = self.comic_download_dir.clone() else {
+            return Err(anyhow!("`comic_download_dir`字段为`None`"));
+        };
+
+        let relative_dir = comic_download_dir
+            .strip_prefix(&download_dir)
+            .context(format!(
+                "无法从路径`{}`中移除前缀`{}`",
+                comic_download_dir.display(),
+                download_dir.display()
+            ))?;
+
+        let comic_export_dir = export_dir.join(relative_dir);
+        Ok(comic_export_dir)
+    }
+
+    fn create_chapter_metadata_for_old_version(
+        &self,
+        comic_download_dir: &Path,
+    ) -> anyhow::Result<()> {
+        let mut chapter_dirs = HashSet::new();
+        for group_entry in std::fs::read_dir(comic_download_dir)?.filter_map(Result::ok) {
+            let Ok(file_type) = group_entry.file_type() else {
+                continue;
+            };
+            if !file_type.is_dir() {
+                continue;
+            }
+
+            for chapter_entry in std::fs::read_dir(group_entry.path())?.filter_map(Result::ok) {
+                let Ok(file_type) = chapter_entry.file_type() else {
+                    continue;
+                };
+                if !file_type.is_dir() {
+                    continue;
+                }
+                chapter_dirs.insert(chapter_entry.path());
+            }
+        }
+
+        for chapter_info in self.groups.values().flatten() {
+            let group_title = filename_filter(&chapter_info.group_name);
+            let chapter_title = filename_filter(&chapter_info.chapter_title);
+            let order = chapter_info.order;
+            let prefixed_chapter_title = format!("{order} {chapter_title}");
+
+            let old_chapter_dir = comic_download_dir
+                .join(&group_title)
+                .join(&prefixed_chapter_title);
+
+            let old_chapter_dir_exists = chapter_dirs.contains(&old_chapter_dir);
+            let old_chapter_metadata_exists = old_chapter_dir.join("章节元数据.json").exists();
+
+            if old_chapter_dir_exists && !old_chapter_metadata_exists {
+                // 如果旧版本的章节目录存在，但没有元数据文件，就创建一个
+                let mut info = chapter_info.clone();
+                info.chapter_download_dir = Some(old_chapter_dir);
+                info.is_downloaded = Some(true);
+                info.save_metadata()?;
+            }
+        }
+
+        Ok(())
     }
 }
 
@@ -318,7 +492,6 @@ fn get_status_and_update_time(li: &ElementRef) -> anyhow::Result<(String, String
 
 #[allow(clippy::cast_possible_wrap)]
 fn get_groups(
-    app: &AppHandle,
     chapter_div: &ElementRef,
     comic_id: i64,
     comic_title: &str,
@@ -386,8 +559,6 @@ fn get_groups(
                     .to_string();
                 let chapter_title = filename_filter(&chapter_title);
 
-                let prefixed_chapter_title = format!("{order} {chapter_title}");
-
                 let chapter_size = a
                     .select(&Selector::parse("span > i").to_anyhow()?)
                     .next()
@@ -400,25 +571,18 @@ fn get_groups(
                     .parse::<i64>()
                     .context("章节页数不是整数")?;
 
-                let is_downloaded = ChapterInfo::get_is_downloaded(
-                    app,
-                    comic_title,
-                    &group_name,
-                    &prefixed_chapter_title,
-                );
-
                 chapter_infos.push(ChapterInfo {
                     chapter_id,
                     chapter_title,
                     chapter_size,
-                    prefixed_chapter_title,
                     comic_id,
                     comic_title: comic_title.to_string(),
                     group_name: group_name.clone(),
                     group_size,
                     order,
                     comic_status: comic_status.to_string(),
-                    is_downloaded: Some(is_downloaded),
+                    is_downloaded: None,
+                    chapter_download_dir: None,
                 });
             }
         }

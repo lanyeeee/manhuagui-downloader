@@ -57,6 +57,9 @@ pub enum ExportCbzEvent {
     Progress { uuid: String, current: u32 },
 
     #[serde(rename_all = "camelCase")]
+    Error { uuid: String },
+
+    #[serde(rename_all = "camelCase")]
     End { uuid: String },
 }
 
@@ -74,6 +77,9 @@ pub enum ExportPdfEvent {
     CreateProgress { uuid: String, current: u32 },
 
     #[serde(rename_all = "camelCase")]
+    CreateError { uuid: String },
+
+    #[serde(rename_all = "camelCase")]
     CreateEnd { uuid: String },
 
     #[serde(rename_all = "camelCase")]
@@ -85,6 +91,9 @@ pub enum ExportPdfEvent {
 
     #[serde(rename_all = "camelCase")]
     MergeProgress { uuid: String, current: u32 },
+
+    #[serde(rename_all = "camelCase")]
+    MergeError { uuid: String },
 
     #[serde(rename_all = "camelCase")]
     MergeEnd { uuid: String },

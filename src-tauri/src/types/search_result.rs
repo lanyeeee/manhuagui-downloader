@@ -1,27 +1,32 @@
+use std::{collections::HashMap, path::PathBuf};
+
 use anyhow::Context;
 use scraper::{ElementRef, Html, Selector};
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use tauri::AppHandle;
 
-use crate::{extensions::ToAnyhow, types::Comic};
+use crate::{extensions::ToAnyhow, utils};
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct SearchResult {
-    comics: Vec<ComicInSearch>,
-    current: i64,
-    total: i64,
+    pub comics: Vec<ComicInSearch>,
+    pub current: i64,
+    pub total: i64,
 }
 
 impl SearchResult {
     pub fn from_html(app: &AppHandle, html: &str) -> anyhow::Result<SearchResult> {
+        let id_to_dir_map =
+            utils::create_id_to_dir_map(app).context("创建漫画ID到下载目录映射失败")?;
+
         let document = Html::parse_document(html);
         let book_result_selector = Selector::parse(".book-result .cf").to_anyhow()?;
 
         let mut comics = Vec::new();
         for book_li in document.select(&book_result_selector) {
-            let comic = ComicInSearch::from_li(app, &book_li)?;
+            let comic = ComicInSearch::from_li(&book_li, &id_to_dir_map)?;
             comics.push(comic);
         }
 
@@ -60,35 +65,40 @@ impl SearchResult {
 #[serde(rename_all = "camelCase")]
 pub struct ComicInSearch {
     /// 漫画id
-    id: i64,
+    pub id: i64,
     /// 漫画标题
-    title: String,
+    pub title: String,
     /// 漫画副标题
-    subtitle: Option<String>,
+    pub subtitle: Option<String>,
     /// 封面链接
-    cover: String,
+    pub cover: String,
     /// 漫画状态(连载中/已完结)
-    status: String,
+    pub status: String,
     /// 上次更新时间
-    update_time: String,
+    pub update_time: String,
     /// 出版年份
-    year: i64,
+    pub year: i64,
     /// 地区
-    region: String,
+    pub region: String,
     /// 类型
-    genres: Vec<String>,
+    pub genres: Vec<String>,
     /// 作者
-    authors: Vec<String>,
+    pub authors: Vec<String>,
     /// 漫画别名
-    aliases: Vec<String>,
+    pub aliases: Vec<String>,
     /// 简介
-    intro: String,
+    pub intro: String,
     /// 是否已下载
-    is_downloaded: bool,
+    pub is_downloaded: bool,
+    /// 漫画的下载目录
+    pub comic_download_dir: PathBuf,
 }
 
 impl ComicInSearch {
-    pub fn from_li(app: &AppHandle, li: &ElementRef) -> anyhow::Result<ComicInSearch> {
+    pub fn from_li(
+        li: &ElementRef,
+        id_to_dir_map: &HashMap<i64, PathBuf>,
+    ) -> anyhow::Result<ComicInSearch> {
         let book_detail_div = li
             .select(&Selector::parse(".book-detail").to_anyhow()?)
             .next()
@@ -158,15 +168,19 @@ impl ComicInSearch {
             aliases,
             intro,
             is_downloaded: false,
+            comic_download_dir: PathBuf::new(),
         };
 
-        comic.update_fields(app);
+        comic.update_fields(id_to_dir_map);
 
         Ok(comic)
     }
 
-    pub fn update_fields(&mut self, app: &AppHandle) {
-        self.is_downloaded = Comic::get_is_downloaded(app, &self.title);
+    pub fn update_fields(&mut self, id_to_dir_map: &HashMap<i64, PathBuf>) {
+        if let Some(comic_download_dir) = id_to_dir_map.get(&self.id) {
+            self.comic_download_dir = comic_download_dir.clone();
+            self.is_downloaded = true;
+        }
     }
 }
 

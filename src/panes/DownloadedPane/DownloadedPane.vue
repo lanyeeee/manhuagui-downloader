@@ -84,6 +84,18 @@ onMounted(() => {
         }
         progressData.current = current
         progressData.progressMessage.content = `${progressData.comicTitle} 正在导出cbz(${current}/${progressData.totalImgCount})`
+      } else if (exportCbzEvent.event === 'Error') {
+        const { uuid } = exportCbzEvent.data
+        const progressData = progresses.value.get(uuid)
+        if (progressData === undefined) {
+          return
+        }
+        progressData.progressMessage.type = 'error'
+        progressData.progressMessage.content = `${progressData.comicTitle} 导出cbz失败(${progressData.totalImgCount}/${progressData.totalImgCount})`
+        setTimeout(() => {
+          progressData.progressMessage.destroy()
+          progresses.value.delete(uuid)
+        }, 3000)
       } else if (exportCbzEvent.event === 'End') {
         const { uuid } = exportCbzEvent.data
         const progressData = progresses.value.get(uuid)
@@ -120,6 +132,18 @@ onMounted(() => {
         }
         progressData.current = current
         progressData.progressMessage.content = `${progressData.comicTitle} 正在导出pdf(${current}/${progressData.totalImgCount})`
+      } else if (exportPdfEvent.event === 'CreateError') {
+        const { uuid } = exportPdfEvent.data
+        const progressData = progresses.value.get(uuid)
+        if (progressData === undefined) {
+          return
+        }
+        progressData.progressMessage.type = 'error'
+        progressData.progressMessage.content = `${progressData.comicTitle} 导出pdf失败(${progressData.totalImgCount}/${progressData.totalImgCount})`
+        setTimeout(() => {
+          progressData.progressMessage.destroy()
+          progresses.value.delete(uuid)
+        }, 3000)
       } else if (exportPdfEvent.event === 'CreateEnd') {
         const { uuid } = exportPdfEvent.data
         const progressData = progresses.value.get(uuid)
@@ -148,6 +172,18 @@ onMounted(() => {
         }
         progressData.current = current
         progressData.progressMessage.content = `${progressData.comicTitle} 正在合并pdf(${current}/${progressData.totalImgCount})`
+      } else if (exportPdfEvent.event === 'MergeError') {
+        const { uuid } = exportPdfEvent.data
+        const progressData = progresses.value.get(uuid)
+        if (progressData === undefined) {
+          return
+        }
+        progressData.progressMessage.type = 'error'
+        progressData.progressMessage.content = `${progressData.comicTitle} 合并pdf失败(${progressData.totalImgCount}/${progressData.totalImgCount})`
+        setTimeout(() => {
+          progressData.progressMessage.destroy()
+          progresses.value.delete(uuid)
+        }, 3000)
       } else if (exportPdfEvent.event === 'MergeEnd') {
         const { uuid } = exportPdfEvent.data
         const progressData = progresses.value.get(uuid)

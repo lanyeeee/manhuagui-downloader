@@ -1153,6 +1153,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "float-ord"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8ce81f49ae8a0482e4c55ea62ebbd7e5a686af544c00b9d090bba3ff9be97b3d"
+
+[[package]]
 name = "fnv"
 version = "1.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2320,6 +2326,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bytes",
+ "float-ord",
  "image",
  "lopdf",
  "lz-str",
@@ -2327,6 +2334,7 @@ dependencies = [
  "parking_lot 0.12.3",
  "rayon",
  "regex",
+ "regex-lite",
  "reqwest",
  "reqwest-middleware",
  "reqwest-retry",
@@ -2336,6 +2344,7 @@ dependencies = [
  "specta",
  "specta-typescript",
  "specta-util",
+ "strfmt",
  "tauri",
  "tauri-build",
  "tauri-plugin-dialog",
@@ -2346,6 +2355,7 @@ dependencies = [
  "tracing-appender",
  "tracing-subscriber",
  "uuid",
+ "walkdir",
  "yaserde",
  "zip",
 ]
@@ -3488,6 +3498,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "regex-lite"
+version = "0.1.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cab834c73d247e67f4fae452806d17d3c7501756d98c8808d7c9c7aa7d18f973"
+
+[[package]]
 name = "regex-syntax"
 version = "0.8.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4109,6 +4125,12 @@ name = "static_assertions"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
+
+[[package]]
+name = "strfmt"
+version = "0.2.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "29fdc163db75f7b5ffa3daf0c5a7136fb0d4b2f35523cd1769da05e034159feb"
 
 [[package]]
 name = "string_cache"

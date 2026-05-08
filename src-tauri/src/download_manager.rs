@@ -11,6 +11,7 @@ use std::{
 
 use anyhow::{anyhow, Context};
 use parking_lot::RwLock;
+use regex::{Captures, Regex};
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use tauri::AppHandle;
@@ -26,6 +27,7 @@ use crate::{
     extensions::{AnyhowErrorToStringChain, AppHandleExt},
     manhuagui_client::ManhuaguiClient,
     types::{ChapterInfo, Comic},
+    utils,
 };
 
 /// 用于管理下载任务
@@ -150,7 +152,11 @@ struct DownloadTask {
 }
 
 impl DownloadTask {
-    pub fn new(app: AppHandle, comic: Comic, chapter_id: i64) -> anyhow::Result<Self> {
+    pub fn new(app: AppHandle, mut comic: Comic, chapter_id: i64) -> anyhow::Result<Self> {
+        comic
+            .update_download_dir_fields_by_fmt(&app)
+            .context(format!("漫画`{}`更新`download_dir`字段失败", comic.title))?;
+
         let chapter_info = comic
             .groups
             .iter()
@@ -205,14 +211,13 @@ impl DownloadTask {
         }
     }
 
-    #[allow(clippy::cast_possible_truncation)]
     async fn download_chapter(&self) {
         let chapter_id = self.chapter_info.chapter_id;
         let comic_title = &self.chapter_info.comic_title;
         let group_name = &self.chapter_info.group_name;
         let chapter_title = &self.chapter_info.chapter_title;
 
-        if let Err(err) = self.save_comic_metadata() {
+        if let Err(err) = self.comic.save_metadata() {
             let err_title = format!("`{comic_title}`保存元数据失败");
             let string_chain = err.to_string_chain();
             tracing::error!(err_title, message = string_chain);
@@ -227,19 +232,20 @@ impl DownloadTask {
             return;
         };
 
+        #[allow(clippy::cast_possible_truncation)]
+        self.total_img_count
+            .store(img_urls.len() as u32, Ordering::Relaxed);
+
         let Some(temp_download_dir) = self.create_temp_download_dir() else {
             return;
         };
 
-        self.total_img_count
-            .store(img_urls.len() as u32, Ordering::Relaxed);
-
         let mut join_set = JoinSet::new();
         for (i, url) in img_urls.into_iter().enumerate() {
-            let save_path = temp_download_dir.join(format!("{:03}.jpg", i + 1));
             let url = url.clone();
-            let download_img_task = DownloadImgTask::new(self, url, save_path);
+            let temp_download_dir = temp_download_dir.clone();
             // 创建下载任务
+            let download_img_task = DownloadImgTask::new(self, url, i, temp_download_dir);
             join_set.spawn(download_img_task.process());
         }
         // 等待所有下载任务完成
@@ -266,6 +272,7 @@ impl DownloadTask {
 
             return;
         }
+
         if let Err(err) = self.rename_temp_download_dir(&temp_download_dir) {
             let err_title =
                 format!("`{comic_title} - {group_name} - {chapter_title}`重命名临时目录失败");
@@ -277,14 +284,13 @@ impl DownloadTask {
 
             return;
         }
-        tracing::trace!(
-            chapter_id,
-            comic_title,
-            group_name,
-            chapter_title,
-            "重命名临时下载目录`{}`成功",
-            temp_download_dir.display()
-        );
+
+        if let Err(err) = self.chapter_info.save_metadata() {
+            let err_title = format!("`{comic_title} - {chapter_title}`保存章节元数据失败");
+            let string_chain = err.to_string_chain();
+            tracing::error!(err_title, message = string_chain);
+        }
+
         // 章节下载成功
         tracing::info!(
             chapter_id,
@@ -298,32 +304,6 @@ impl DownloadTask {
         // 发送下载结束事件
         self.set_state(DownloadTaskState::Completed);
         self.emit_download_task_update_event();
-    }
-
-    pub fn save_comic_metadata(&self) -> anyhow::Result<()> {
-        let mut comic = self.comic.as_ref().clone();
-        // 将Comic的is_downloaded字段设置为None，这样能使is_downloaded字段在序列化时被忽略
-        comic.is_downloaded = None;
-        // 将所有章节的is_downloaded字段设置为None，这样能使is_downloaded字段在序列化时被忽略
-        for chapter_infos in comic.groups.values_mut() {
-            for chapter_info in chapter_infos.iter_mut() {
-                chapter_info.is_downloaded = None;
-            }
-        }
-
-        let comic_json = serde_json::to_string_pretty(&comic).context("将Comic序列化为json失败")?;
-
-        let download_dir = self.app.get_config().read().download_dir.clone();
-        let metadata_dir = download_dir.join(&comic.title);
-        let metadata_path = metadata_dir.join("元数据.json");
-
-        std::fs::create_dir_all(&metadata_dir)
-            .context(format!("创建目录`{}`失败", metadata_dir.display()))?;
-
-        std::fs::write(&metadata_path, comic_json)
-            .context(format!("写入文件`{}`失败", metadata_path.display()))?;
-
-        Ok(())
     }
 
     async fn acquire_chapter_permit<'a>(
@@ -470,16 +450,21 @@ impl DownloadTask {
         let comic_title = &self.chapter_info.comic_title;
         let group_name = &self.chapter_info.group_name;
         let chapter_title = &self.chapter_info.chapter_title;
-        let prefixed_chapter_title = &self.chapter_info.prefixed_chapter_title;
 
-        let temp_download_dir = self
-            .app
-            .get_config()
-            .read()
-            .download_dir
-            .join(comic_title)
-            .join(group_name)
-            .join(format!(".下载中-{prefixed_chapter_title}")); // 以 `.下载中-` 开头，表示是临时目录
+        let temp_download_dir = match self.chapter_info.get_temp_download_dir() {
+            Ok(temp_download_dir) => temp_download_dir,
+            Err(err) => {
+                let err_title =
+                    format!("`{comic_title} - {group_name} - {chapter_title}`获取临时下载目录失败");
+                let string_chain = err.to_string_chain();
+                tracing::error!(err_title, message = string_chain);
+
+                self.set_state(DownloadTaskState::Failed);
+                self.emit_download_task_update_event();
+
+                return None;
+            }
+        };
 
         if let Err(err) = std::fs::create_dir_all(&temp_download_dir).map_err(anyhow::Error::from) {
             let err_title = format!(
@@ -494,6 +479,7 @@ impl DownloadTask {
 
             return None;
         }
+
         tracing::trace!(
             chapter_id,
             comic_title,
@@ -502,25 +488,26 @@ impl DownloadTask {
             "创建临时下载目录`{}`成功",
             temp_download_dir.display()
         );
+
         Some(temp_download_dir)
     }
 
-    fn rename_temp_download_dir(&self, temp_download_dir: &Path) -> anyhow::Result<()> {
-        let Some(parent) = temp_download_dir.parent() else {
-            return Err(anyhow!("无法获取`{}`的父目录", temp_download_dir.display()));
-        };
+    fn rename_temp_download_dir(&self, temp_download_dir: &PathBuf) -> anyhow::Result<()> {
+        let chapter_download_dir = self
+            .chapter_info
+            .chapter_download_dir
+            .as_ref()
+            .context("`chapter_download_dir`字段为`None`")?;
 
-        let download_dir = parent.join(&self.chapter_info.prefixed_chapter_title);
-
-        if download_dir.exists() {
-            std::fs::remove_dir_all(&download_dir)
-                .context(format!("删除目录`{}`失败", download_dir.display()))?;
+        if chapter_download_dir.exists() {
+            std::fs::remove_dir_all(chapter_download_dir)
+                .context(format!("删除`{}`失败", chapter_download_dir.display()))?;
         }
 
-        std::fs::rename(temp_download_dir, &download_dir).context(format!(
+        std::fs::rename(temp_download_dir, chapter_download_dir).context(format!(
             "将`{}`重命名为`{}`失败",
             temp_download_dir.display(),
-            download_dir.display()
+            chapter_download_dir.display()
         ))?;
 
         Ok(())
@@ -585,18 +572,25 @@ struct DownloadImgTask {
     download_task: DownloadTask,
     chapter_info: Arc<ChapterInfo>,
     url: String,
-    save_path: PathBuf,
+    index: usize,
+    temp_download_dir: PathBuf,
 }
 
 impl DownloadImgTask {
-    pub fn new(download_task: &DownloadTask, url: String, save_path: PathBuf) -> Self {
+    pub fn new(
+        download_task: &DownloadTask,
+        url: String,
+        index: usize,
+        temp_download_dir: PathBuf,
+    ) -> Self {
         Self {
             app: download_task.app.clone(),
             download_manager: download_task.download_manager.clone(),
             download_task: download_task.clone(),
             chapter_info: download_task.chapter_info.clone(),
             url,
-            save_path,
+            index,
+            temp_download_dir,
         }
     }
 
@@ -630,12 +624,14 @@ impl DownloadImgTask {
 
     async fn download_img(&self) {
         let url = &self.url;
-        let save_path = &self.save_path;
         let chapter_id = self.chapter_info.chapter_id;
         let comic_title = &self.chapter_info.comic_title;
         let group_name = &self.chapter_info.group_name;
         let chapter_title = &self.chapter_info.chapter_title;
 
+        let save_path = self
+            .temp_download_dir
+            .join(format!("{:03}.jpg", self.index + 1));
         if save_path.exists() {
             // 如果图片已经存在，则直接跳过下载
             self.download_task
@@ -683,7 +679,7 @@ impl DownloadImgTask {
             "图片成功下载到内存"
         );
         // 保存图片
-        if let Err(err) = std::fs::write(save_path, &img_data).map_err(anyhow::Error::from) {
+        if let Err(err) = std::fs::write(&save_path, &img_data).map_err(anyhow::Error::from) {
             let err_title = format!("保存图片`{}`失败", save_path.display());
             let string_chain = err.to_string_chain();
             tracing::error!(err_title, message = string_chain);
@@ -793,5 +789,250 @@ impl DownloadImgTask {
 
     fn manhuagui_client(&self) -> ManhuaguiClient {
         self.app.get_manhuagui_client().inner().clone()
+    }
+}
+
+#[derive(Default, Debug, PartialEq, Clone, Serialize, Deserialize, Type)]
+pub struct ComicDirFmtParams {
+    pub comic_id: i64,
+    pub comic_title: String,
+    pub comic_subtitle: String,
+    pub pub_year: i64,
+    pub region: String,
+    pub author: String,
+}
+
+impl Comic {
+    /// 根据fmt更新`comic_download_dir`和`chapter_infos.chapter_download_dir`字段
+    fn update_download_dir_fields_by_fmt(&mut self, app: &AppHandle) -> anyhow::Result<()> {
+        let comic_id = self.id;
+        let comic_title = self.title.clone();
+        let comic_subtitle = self.subtitle.clone().unwrap_or_default();
+        let author = self.authors.join(", ");
+
+        let comic_dir_fmt_params = ComicDirFmtParams {
+            comic_id,
+            comic_title: comic_title.clone(),
+            comic_subtitle: comic_subtitle.clone(),
+            pub_year: self.year,
+            region: self.region.clone(),
+            author: author.clone(),
+        };
+        let comic_download_dir = Comic::get_comic_download_dir_by_fmt(app, &comic_dir_fmt_params)?;
+        self.comic_download_dir = Some(comic_download_dir.clone());
+
+        for chapter_info in &mut self.groups.iter_mut().flat_map(|(_, chapters)| chapters) {
+            let chapter_dir_fmt_params = ChapterDirFmtParams {
+                comic_id,
+                comic_title: comic_title.clone(),
+                comic_subtitle: comic_subtitle.clone(),
+                pub_year: self.year,
+                region: self.region.clone(),
+                author: author.clone(),
+                group_name: chapter_info.group_name.clone(),
+                chapter_id: chapter_info.chapter_id,
+                chapter_title: chapter_info.chapter_title.clone(),
+                order: chapter_info.order,
+            };
+            let chapter_download_dir = ChapterInfo::get_chapter_download_dir_by_fmt(
+                app,
+                &comic_download_dir,
+                &chapter_dir_fmt_params,
+            )?;
+            chapter_info.chapter_download_dir = Some(chapter_download_dir);
+        }
+
+        Ok(())
+    }
+
+    fn get_comic_download_dir_by_fmt(
+        app: &AppHandle,
+        fmt_params: &ComicDirFmtParams,
+    ) -> anyhow::Result<PathBuf> {
+        use strfmt::strfmt;
+
+        let json_value = serde_json::to_value(fmt_params)
+            .context("将ComicDirFmtParams转为serde_json::Value失败")?;
+
+        let json_map = json_value
+            .as_object()
+            .context("ComicDirFmtParams不是JSON对象")?;
+
+        let vars: HashMap<String, String> = json_map
+            .into_iter()
+            .map(|(k, v)| {
+                let key = k.clone();
+                let value = match v {
+                    serde_json::Value::String(s) => s.clone(),
+                    _ => v.to_string(),
+                };
+                (key, value)
+            })
+            .collect();
+
+        let (download_dir, comic_dir_fmt) = {
+            let config = app.get_config();
+            let config = config.read();
+            (config.download_dir.clone(), config.comic_dir_fmt.clone())
+        };
+
+        let dir_fmt_parts: Vec<&str> = comic_dir_fmt.split('/').collect();
+
+        let mut dir_names = Vec::new();
+        for fmt in dir_fmt_parts {
+            let dir_name = strfmt(fmt, &vars).context("格式化目录名失败")?;
+            let dir_name = utils::filename_filter(&dir_name);
+            if !dir_name.is_empty() {
+                dir_names.push(dir_name);
+            }
+        }
+        // 将格式化后的目录名拼接成完整的目录路径
+        let mut comic_download_dir = download_dir;
+        for dir_name in dir_names {
+            comic_download_dir = comic_download_dir.join(dir_name);
+        }
+
+        Ok(comic_download_dir)
+    }
+}
+
+#[derive(Default, Debug, PartialEq, Clone, Serialize, Deserialize, Type)]
+pub struct ChapterDirFmtParams {
+    pub comic_id: i64,
+    pub comic_title: String,
+    pub comic_subtitle: String,
+    pub pub_year: i64,
+    pub region: String,
+    pub author: String,
+    pub group_name: String,
+    pub chapter_id: i64,
+    pub chapter_title: String,
+    pub order: f64,
+}
+
+impl ChapterInfo {
+    fn get_chapter_download_dir_by_fmt(
+        app: &AppHandle,
+        comic_download_dir: &Path,
+        fmt_params: &ChapterDirFmtParams,
+    ) -> anyhow::Result<PathBuf> {
+        use strfmt::strfmt;
+
+        let json_value = serde_json::to_value(fmt_params)
+            .context("将ChapterDirFmtParams转为serde_json::Value失败")?;
+
+        let json_map = json_value
+            .as_object()
+            .context("ChapterDirFmtParams不是JSON对象")?;
+
+        let vars: HashMap<String, String> = json_map
+            .into_iter()
+            .map(|(k, v)| {
+                let key = k.clone();
+                let value = match v {
+                    serde_json::Value::String(s) => s.clone(),
+                    _ => v.to_string(),
+                };
+                (key, value)
+            })
+            .collect();
+        let mut chapter_dir_fmt = app.get_config().read().chapter_dir_fmt.clone();
+        Self::preprocess_order_placeholder(&mut chapter_dir_fmt, &vars)
+            .context("预处理`order`占位符失败")?;
+
+        let dir_fmt_parts: Vec<&str> = chapter_dir_fmt.split('/').collect();
+
+        let mut dir_names = Vec::new();
+        for fmt in dir_fmt_parts {
+            let dir_name = strfmt(fmt, &vars).context("格式化目录名失败")?;
+            let dir_name = utils::filename_filter(&dir_name);
+            if !dir_name.is_empty() {
+                dir_names.push(dir_name);
+            }
+        }
+        // 将格式化后的目录名拼接成完整的目录路径
+        let mut chapter_download_dir = comic_download_dir.to_path_buf();
+        for dir_name in dir_names {
+            chapter_download_dir = chapter_download_dir.join(dir_name);
+        }
+
+        Ok(chapter_download_dir)
+    }
+
+    /// 预处理`fmt`中的`order`占位符
+    ///
+    /// ### 功能描述
+    /// 标准的格式化(如`{order:0>4}`)会将宽度补齐应用于整个数字字符串
+    /// 当`order`为`5.1`时，标准输出为`05.1`(总长度4)
+    ///
+    /// 本函数旨在实现**仅对整数部分补齐，小数部分追加在后**的效果
+    /// 当`order`为`5.1`时，本函数会将其转换为`0005.1`(整数补齐至4位，小数保留)
+    ///
+    /// ### 处理流程
+    /// 1. **解析数值**：从`vars`中提取`order`，将其拆分为整数部分和小数部分
+    /// 2. **正则扫描**：使用正则查找模板中的`{order}`或`{order:xxx}`占位符，同时兼容`{{` 和 `}}`转义
+    /// 3. **自定义格式化**：
+    ///    - 提取占位符中的格式参数(如`0>4`)
+    ///    - 仅将该参数应用于整数部分
+    ///    - 若存在非零小数部分，将其追加到格式化后的整数后面
+    /// 4. **原地替换**：将计算出的最终字符串(如 `0005.1`)直接替换掉原模板中的占位符
+    ///
+    /// ### 示例
+    /// - 输入 fmt: `"{order:0>3} {chapter_title}"`, order: `"1.5"`
+    /// - 处理后 fmt: `"001.5 {chapter_title}"`
+    fn preprocess_order_placeholder(
+        fmt: &mut String,
+        vars: &HashMap<String, String>,
+    ) -> anyhow::Result<()> {
+        use strfmt::strfmt;
+
+        let Some(order_str) = vars.get("order") else {
+            return Ok(());
+        };
+
+        // 分离整数和小数
+        let (int_part, frac_part) = match order_str.split_once('.') {
+            Some((i, f)) => (i, f),
+            None => (order_str.as_str(), ""),
+        };
+        let should_append_frac = !frac_part.is_empty() && frac_part != "0";
+
+        // group 1: "{{" (转义左括号)
+        // group 2: "}}" (转义右括号)
+        // group 3: "{order...}" (真正的目标)
+        // group 4: 冒号后的格式参数 (仅当 group 3 匹配时有效)
+        let re = Regex::new(r"(\{\{)|(\}\})|(\{order(?::(.*?))?\})")?;
+
+        // 执行替换
+        let new_fmt = re.replace_all(fmt, |caps: &Captures| {
+            // 遇到 {{，原样返回，消耗掉字符避免后续匹配误伤
+            if caps.get(1).is_some() {
+                return "{{".to_string();
+            }
+            // 遇到 }}，同理
+            if caps.get(2).is_some() {
+                return "}}".to_string();
+            }
+            // 匹配到了 {order...}
+            // 此时 Group 4 是格式参数 (例如 "0>4")
+            let fmt_spec = caps.get(4).map_or("", |m| m.as_str());
+
+            // 构造临时模板 "{v:xxx}" 来格式化整数部分
+            let int_fmt = format!("{{v:{fmt_spec}}}");
+            let mut temp_vars = HashMap::new();
+            temp_vars.insert("v".to_string(), int_part.to_string());
+
+            let formatted_int = strfmt(&int_fmt, &temp_vars).unwrap_or(int_part.to_string());
+
+            if should_append_frac {
+                format!("{formatted_int}.{frac_part}")
+            } else {
+                formatted_int
+            }
+        });
+
+        *fmt = new_fmt.to_string();
+
+        Ok(())
     }
 }

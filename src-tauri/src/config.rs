@@ -19,6 +19,8 @@ pub struct Config {
     pub proxy_mode: ProxyMode,
     pub proxy_host: String,
     pub proxy_port: u16,
+    pub comic_dir_fmt: String,
+    pub chapter_dir_fmt: String,
 }
 
 impl Config {
@@ -86,6 +88,8 @@ impl Config {
             proxy_mode: ProxyMode::System,
             proxy_host: "127.0.0.1".to_string(),
             proxy_port: 7890,
+            comic_dir_fmt: "{comic_title}".to_string(),
+            chapter_dir_fmt: "{group_name}/{order} {chapter_title}".to_string(),
         }
     }
 }
