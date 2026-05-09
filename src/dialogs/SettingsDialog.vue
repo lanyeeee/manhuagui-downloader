@@ -13,6 +13,8 @@ import {
   NModal,
   NRadioButton,
   NRadioGroup,
+  NTooltip,
+  NConfigProvider,
   useMessage,
 } from 'naive-ui'
 import { ref } from 'vue'
@@ -23,6 +25,8 @@ const message = useMessage()
 const showing = defineModel<boolean>('showing', { required: true })
 
 const proxyHost = ref<string>(store.config?.proxyHost ?? '')
+const comicDirFmt = ref<string>(store.config?.comicDirFmt ?? '')
+const chapterDirFmt = ref<string>(store.config?.chapterDirFmt ?? '')
 
 async function showConfigPathInFileManager() {
   const configPath = await path.join(await appDataDir(), 'config.json')
@@ -121,6 +125,154 @@ async function showConfigPathInFileManager() {
             placeholder=""
             :parse="(x: string) => parseInt(x)" />
         </n-input-group>
+
+        <span class="font-bold mt-2">漫画目录格式</span>
+        <n-tooltip placement="top" trigger="hover">
+          <div>
+            可以用斜杠
+            <span class="rounded bg-gray-500 px-1 select-all text-white">/</span>
+            来分隔目录层级
+          </div>
+          <div class="font-semibold mt-2">
+            <span>可用字段：</span>
+          </div>
+          <div>
+            <span class="rounded bg-gray-500 px-1 select-all">comic_id</span>
+            <span class="ml-2">漫画ID</span>
+          </div>
+          <div>
+            <span class="rounded bg-gray-500 px-1 select-all">comic_title</span>
+            <span class="ml-2">漫画标题</span>
+          </div>
+          <div>
+            <span class="rounded bg-gray-500 px-1 select-all">comic_subtitle</span>
+            <span class="ml-2">漫画副标题</span>
+          </div>
+          <div>
+            <span class="rounded bg-gray-500 px-1 select-all">pub_year</span>
+            <span class="ml-2">出版年份</span>
+          </div>
+          <div>
+            <span class="rounded bg-gray-500 px-1 select-all">region</span>
+            <span class="ml-2">地区</span>
+          </div>
+          <div>
+            <span class="rounded bg-gray-500 px-1 select-all">author</span>
+            <span class="ml-2">作者</span>
+          </div>
+          <div class="font-semibold mt-2">例如格式</div>
+          <div class="bg-gray-200 rounded-md p-1 text-black w-fit">{author}/{comic_title}</div>
+          <div class="font-semibold">
+            <span>下载漫画ID为</span>
+            <span class="text-blue mx-1">30252</span>
+            <span>的作品的任何一个章节会创建</span>
+          </div>
+          <div class="flex gap-1">
+            <span class="bg-gray-200 rounded-md px-1 w-fit text-black">藤本树</span>
+            <span class="rounded bg-gray-500 px-1 select-all text-white">/</span>
+            <span class="bg-gray-200 rounded-md px-1 w-fit text-black">电锯人</span>
+          </div>
+          <div class="font-semibold">
+            两层文件夹，漫画元数据保存在最内层的文件夹
+            <span class="bg-gray-200 rounded-md px-1 w-fit text-black font-normal">电锯人</span>
+            里
+          </div>
+          <template #trigger>
+            <n-input
+              v-model:value="comicDirFmt"
+              size="small"
+              @blur="store.config.comicDirFmt = comicDirFmt"
+              @keydown.enter="store.config.comicDirFmt = comicDirFmt" />
+          </template>
+        </n-tooltip>
+
+        <span class="font-bold mt-2">章节目录格式</span>
+        <n-config-provider
+          :theme-overrides="{
+            Scrollbar: { color: 'rgba(255, 255, 255, 0.25)', colorHover: 'rgba(255, 255, 255, 0.3)' },
+          }">
+          <n-tooltip placement="top" trigger="hover" class="max-h-60vh" :scrollable="true">
+            <div>
+              可以用斜杠
+              <span class="rounded bg-gray-500 px-1 select-all text-white">/</span>
+              来分隔目录层级
+            </div>
+            <div class="font-semibold mt-2">
+              <span>可用字段：</span>
+            </div>
+            <div>
+              <span class="rounded bg-gray-500 px-1 select-all">comic_id</span>
+              <span class="ml-2">漫画ID</span>
+            </div>
+            <div>
+              <span class="rounded bg-gray-500 px-1 select-all">comic_title</span>
+              <span class="ml-2">漫画标题</span>
+            </div>
+            <div>
+              <span class="rounded bg-gray-500 px-1 select-all">comic_subtitle</span>
+              <span class="ml-2">漫画副标题</span>
+            </div>
+            <div>
+              <span class="rounded bg-gray-500 px-1 select-all">pub_year</span>
+              <span class="ml-2">出版年份</span>
+            </div>
+            <div>
+              <span class="rounded bg-gray-500 px-1 select-all">region</span>
+              <span class="ml-2">地区</span>
+            </div>
+            <div>
+              <span class="rounded bg-gray-500 px-1 select-all">author</span>
+              <span class="ml-2">作者</span>
+            </div>
+            <div>
+              <span class="rounded bg-gray-500 px-1 select-all">group_name</span>
+              <span class="ml-2">组名(单话、单行本、番外篇)</span>
+            </div>
+            <div>
+              <span class="rounded bg-gray-500 px-1 select-all">chapter_id</span>
+              <span class="ml-2">章节ID</span>
+            </div>
+            <div>
+              <span class="rounded bg-gray-500 px-1 select-all">chapter_title</span>
+              <span class="ml-2">章节标题</span>
+            </div>
+            <div>
+              <span class="rounded bg-gray-500 px-1 select-all">order</span>
+              <span class="ml-2">章节在分组中的序号，一些特殊章节会有小数点，支持补齐</span>
+            </div>
+            <div class="text-xs">
+              <span>补齐用法：</span>
+              <span class="rounded bg-gray-500 px-1 select-all font-mono">{order:0>4}</span>
+              <span>表示用0补齐4位，</span>
+              <span class="mr-2">例如 13 &rarr; 0013</span>
+              <span>13.1 &rarr; 0013.1</span>
+            </div>
+            <div class="font-semibold mt-2">例如格式</div>
+            <div class="bg-gray-200 rounded-md p-1 text-black w-fit">{group_name}/{order:0>3} {chapter_title}</div>
+            <div class="font-semibold">
+              <span>下载</span>
+              <span class="text-blue mx-1">电锯人 - 单话 - 第13话</span>
+              <span>会在漫画目录下再创建</span>
+            </div>
+            <div class="flex gap-1">
+              <span class="bg-gray-200 rounded-md px-1 w-fit text-black">单话</span>
+              <span class="rounded bg-gray-500 px-1 select-all text-white">/</span>
+              <span class="bg-gray-200 rounded-md px-1 w-fit text-black">013 第13话</span>
+            </div>
+            <div class="font-semibold">
+              两层文件夹，章节元数据保存在最内层的文件夹
+              <span class="bg-gray-200 rounded-md px-1 w-fit text-black font-normal">013 第13话</span>
+              里
+            </div>
+            <template #trigger>
+              <n-input
+                v-model:value="chapterDirFmt"
+                size="small"
+                @blur="store.config.chapterDirFmt = chapterDirFmt"
+                @keydown.enter="store.config.chapterDirFmt = chapterDirFmt" />
+            </template>
+          </n-tooltip>
+        </n-config-provider>
 
         <n-button class="ml-auto mt-2" size="small" @click="showConfigPathInFileManager">打开配置目录</n-button>
       </div>
