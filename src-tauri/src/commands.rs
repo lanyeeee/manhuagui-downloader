@@ -1,17 +1,19 @@
-use std::{collections::HashMap, time::Duration};
+use std::{collections::HashMap, path::PathBuf, time::Duration};
 
-use anyhow::Context;
+use anyhow::{anyhow, Context};
+use indexmap::IndexMap;
 use tauri::AppHandle;
 use tauri_plugin_opener::OpenerExt;
 use tauri_specta::Event;
 use tokio::time::sleep;
+use walkdir::WalkDir;
 
 use crate::{
     config::Config,
     errors::{CommandError, CommandResult},
     events::UpdateDownloadedComicsEvent,
     export,
-    extensions::{AnyhowErrorToStringChain, AppHandleExt},
+    extensions::{AnyhowErrorToStringChain, AppHandleExt, WalkDirEntryExt},
     logger,
     types::{
         ChapterInfo, Comic, ComicInFavorite, ComicInSearch, GetFavoriteResult, SearchResult,
@@ -148,44 +150,118 @@ pub async fn get_favorite(app: AppHandle, page_num: i64) -> CommandResult<GetFav
 #[tauri::command(async)]
 #[specta::specta]
 #[allow(clippy::needless_pass_by_value)]
-pub fn get_downloaded_comics(app: AppHandle) -> CommandResult<Vec<Comic>> {
+pub fn get_downloaded_comics(app: AppHandle) -> Vec<Comic> {
     let config = app.get_config();
 
     let download_dir = config.read().download_dir.clone();
     // 遍历下载目录，获取所有元数据文件的路径和修改时间
-    let mut metadata_path_with_modify_time = std::fs::read_dir(&download_dir)
-        .context(format!("读取下载目录`{}`失败", download_dir.display()))
-        .map_err(|err| CommandError::from("获取已下载的漫画失败", err))?
+    let mut metadata_path_and_modify_time_pairs = Vec::new();
+    for entry in WalkDir::new(&download_dir)
+        .into_iter()
         .filter_map(Result::ok)
-        .filter_map(|entry| {
-            let metadata_path = entry.path().join("元数据.json");
-            if !metadata_path.exists() {
-                return None;
-            }
-            let modify_time = metadata_path.metadata().ok()?.modified().ok()?;
-            Some((metadata_path, modify_time))
-        })
-        .collect::<Vec<_>>();
-    // 按照文件修改时间排序，最新的排在最前面
-    metadata_path_with_modify_time.sort_by(|(_, a), (_, b)| b.cmp(a));
-    // 从元数据文件中读取Comic
-    let downloaded_comics = metadata_path_with_modify_time
-        .iter()
-        .filter_map(
-            |(metadata_path, _)| match Comic::from_metadata(metadata_path) {
-                Ok(comic) => Some(comic),
-                Err(err) => {
-                    let err_title = format!("读取元数据文件`{}`失败", metadata_path.display());
-                    let string_chain = err.to_string_chain();
-                    tracing::error!(err_title, message = string_chain);
-                    None
-                }
-            },
-        )
-        .collect::<Vec<_>>();
+    {
+        let path = entry.path();
 
-    tracing::debug!("获取已下载的漫画成功");
-    Ok(downloaded_comics)
+        if !entry.is_comic_metadata() {
+            continue;
+        }
+
+        let metadata = match path
+            .metadata()
+            .map_err(anyhow::Error::from)
+            .context(format!("获取`{}`的metadata失败", path.display()))
+        {
+            Ok(metadata) => metadata,
+            Err(err) => {
+                let err_title = "获取已下载漫画的过程中遇到错误，已跳过";
+                let string_chain = err.to_string_chain();
+                tracing::error!(err_title, message = string_chain);
+                continue;
+            }
+        };
+
+        let modify_time = match metadata
+            .modified()
+            .map_err(anyhow::Error::from)
+            .context(format!("获取`{}`的修改时间失败", path.display()))
+        {
+            Ok(modify_time) => modify_time,
+            Err(err) => {
+                let err_title = "获取已下载漫画的过程中遇到错误，已跳过";
+                let string_chain = err.to_string_chain();
+                tracing::error!(err_title, message = string_chain);
+                continue;
+            }
+        };
+
+        metadata_path_and_modify_time_pairs.push((path.to_path_buf(), modify_time));
+    }
+    // 按照文件修改时间排序，最新的排在最前面
+    metadata_path_and_modify_time_pairs.sort_by(|(_, a), (_, b)| b.cmp(a));
+
+    let mut downloaded_comics = Vec::new();
+    for (metadata_path, _) in metadata_path_and_modify_time_pairs {
+        match Comic::from_metadata(&metadata_path).context(format!(
+            "从元数据`{}`转为Comic失败",
+            metadata_path.display()
+        )) {
+            Ok(comic) => downloaded_comics.push(comic),
+            Err(err) => {
+                let err_title = "获取已下载漫画的过程中遇到错误，已跳过";
+                let string_chain = err.to_string_chain();
+                tracing::error!(err_title, message = string_chain);
+            }
+        }
+    }
+
+    // 按照漫画ID分组，以方便去重
+    let mut comics_by_id: IndexMap<i64, Vec<Comic>> = IndexMap::new();
+    for comic in downloaded_comics {
+        comics_by_id.entry(comic.id).or_default().push(comic);
+    }
+
+    let mut unique_comics = Vec::new();
+    for (_comic_id, mut comics) in comics_by_id {
+        // 该漫画ID对应的所有漫画下载目录，可能有多个版本，所以需要去重
+        let comic_download_dirs: Vec<&PathBuf> = comics
+            .iter()
+            .filter_map(|comic| comic.comic_download_dir.as_ref())
+            .collect();
+
+        if comic_download_dirs.is_empty() {
+            // 其实这种情况不应该发生，因为漫画元数据文件应该总是有下载目录的
+            continue;
+        }
+
+        // 选第一个作为保留的漫画
+        let chosen_download_dir = comic_download_dirs[0];
+
+        if comics.len() > 1 {
+            let dir_paths_string = comic_download_dirs
+                .iter()
+                .map(|path| format!("`{}`", path.display()))
+                .collect::<Vec<String>>()
+                .join(", ");
+            // 如果有重复的漫画，打印错误信息
+            let comic_title = &comics[0].title;
+            let err_title = "获取已下载漫画的过程中遇到错误";
+            let string_chain = anyhow!("所有版本路径: [{dir_paths_string}]")
+                .context(format!(
+                    "此次获取已下载漫画的结果中只保留版本`{}`",
+                    chosen_download_dir.display()
+                ))
+                .context(format!(
+                    "漫画`{comic_title}`在下载目录里有多个版本，请手动处理，只保留一个版本"
+                ))
+                .to_string_chain();
+            tracing::error!(err_title, message = string_chain);
+        }
+        // 取第一个作为保留的漫画
+        let chosen_comic = comics.remove(0);
+        unique_comics.push(chosen_comic);
+    }
+
+    unique_comics
 }
 
 #[tauri::command(async)]
@@ -218,7 +294,7 @@ pub async fn update_downloaded_comics(app: AppHandle) -> CommandResult<()> {
     let download_manager = app.get_download_manager();
 
     // 从下载目录中获取已下载的漫画
-    let downloaded_comics = get_downloaded_comics(app.clone())?;
+    let downloaded_comics = get_downloaded_comics(app.clone());
     // 发送正在获取漫画事件
     let total = downloaded_comics.len() as i64;
     let interval_sec = config.read().update_get_comic_interval_sec;

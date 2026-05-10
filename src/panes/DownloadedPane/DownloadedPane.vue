@@ -52,12 +52,7 @@ watch(
       return
     }
 
-    const result = await commands.getDownloadedComics()
-    if (result.status === 'error') {
-      console.error(result.error)
-      return
-    }
-    downloadedComics.value = result.data
+    downloadedComics.value = await commands.getDownloadedComics()
   },
   { immediate: true },
 )
