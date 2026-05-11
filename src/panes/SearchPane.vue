@@ -127,7 +127,8 @@ async function pickComic() {
           :comicAuthors="comic.authors"
           :comicGenres="comic.genres"
           :comicLastUpdateTime="comic.updateTime"
-          :comic-downloaded="comic.isDownloaded" />
+          :comic-downloaded="comic.isDownloaded"
+          :comic-download-dir="comic.comicDownloadDir" />
       </div>
     </div>
 

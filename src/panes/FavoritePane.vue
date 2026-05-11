@@ -54,7 +54,8 @@ watch(
           :comicCover="comic.cover"
           :comicLastUpdateTime="comic.lastUpdate"
           :comicLastReadTime="comic.lastRead"
-          :comic-downloaded="comic.isDownloaded" />
+          :comic-downloaded="comic.isDownloaded"
+          :comic-download-dir="comic.comicDownloadDir" />
       </div>
       <n-pagination
         class="p-2 mt-auto"

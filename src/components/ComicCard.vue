@@ -2,7 +2,6 @@
 import { NButton, NCard } from 'naive-ui'
 import { commands } from '../bindings.ts'
 import { useStore } from '../store.ts'
-import { join } from '@tauri-apps/api/path'
 
 const store = useStore()
 
@@ -16,6 +15,7 @@ const props = defineProps<{
   comicLastUpdateTime?: string
   comicLastReadTime?: string
   comicDownloaded: boolean
+  comicDownloadDir: string
 }>()
 
 async function pickComic() {
@@ -30,12 +30,7 @@ async function pickComic() {
 }
 
 async function showComicDownloadDirInFileManager() {
-  if (store.config === undefined) {
-    return
-  }
-
-  const comicDownloadDir = await join(store.config.downloadDir, props.comicTitle)
-  const result = await commands.showPathInFileManager(comicDownloadDir)
+  const result = await commands.showPathInFileManager(props.comicDownloadDir)
   if (result.status === 'error') {
     console.error(result.error)
   }

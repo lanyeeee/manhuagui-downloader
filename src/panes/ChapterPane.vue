@@ -4,7 +4,6 @@ import { PartialSelectionOptions, SelectionArea, SelectionEvent } from '@viselec
 import { computed, defineComponent, nextTick, PropType, ref, useTemplateRef, watch, watchEffect } from 'vue'
 import { useStore } from '../store.ts'
 import { DropdownOption, NButton, NCheckbox, NDropdown, NEmpty, NTabPane, NTabs, useMessage } from 'naive-ui'
-import { join } from '@tauri-apps/api/path'
 
 export type State = DownloadTaskState | 'Idle'
 
@@ -194,11 +193,16 @@ async function reloadPickedComic() {
 }
 
 async function showComicDownloadDirInFileManager() {
-  if (store.config === undefined || store.pickedComic === undefined) {
+  if (store.pickedComic === undefined) {
     return
   }
 
-  const comicDownloadDir = await join(store.config.downloadDir, store.pickedComic.title)
+  const comicDownloadDir = store.pickedComic.comicDownloadDir
+  if (comicDownloadDir === undefined || comicDownloadDir === null) {
+    console.error('comicDownloadDir的值为undefined或null')
+    return
+  }
+
   const result = await commands.showPathInFileManager(comicDownloadDir)
   if (result.status === 'error') {
     console.error(result.error)

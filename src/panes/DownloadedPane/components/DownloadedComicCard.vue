@@ -2,7 +2,6 @@
 import { Comic, commands } from '../../../bindings.ts'
 import { computed } from 'vue'
 import { useStore } from '../../../store.ts'
-import { join } from '@tauri-apps/api/path'
 import { NButton, NCard } from 'naive-ui'
 
 interface GroupInfo {
@@ -55,11 +54,12 @@ async function exportPdf() {
 }
 
 async function showComicDownloadDirInFileManager() {
-  if (store.config === undefined) {
+  const comicDownloadDir = props.comic.comicDownloadDir
+  if (comicDownloadDir === undefined || comicDownloadDir === null) {
+    console.error('comicDownloadDir的值为undefined或null')
     return
   }
 
-  const comicDownloadDir = await join(store.config.downloadDir, props.comic.title)
   const result = await commands.showPathInFileManager(comicDownloadDir)
   if (result.status === 'error') {
     console.error(result.error)
