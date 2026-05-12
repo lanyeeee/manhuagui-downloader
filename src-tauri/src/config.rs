@@ -21,6 +21,8 @@ pub struct Config {
     pub proxy_port: u16,
     pub comic_dir_fmt: String,
     pub chapter_dir_fmt: String,
+    pub create_pdf_concurrency: usize,
+    pub enable_merge_pdf: bool,
 }
 
 impl Config {
@@ -75,6 +77,10 @@ impl Config {
     }
 
     fn default(app_data_dir: &Path) -> Config {
+        let cpu_core_num = std::thread::available_parallelism()
+            .map(std::num::NonZero::get)
+            .unwrap_or(1);
+
         Config {
             cookie: String::new(),
             download_dir: app_data_dir.join("漫画下载"),
@@ -90,6 +96,8 @@ impl Config {
             proxy_port: 7890,
             comic_dir_fmt: "{comic_title}".to_string(),
             chapter_dir_fmt: "{group_name}/{order} {chapter_title}".to_string(),
+            create_pdf_concurrency: cpu_core_num,
+            enable_merge_pdf: true,
         }
     }
 }

@@ -376,7 +376,7 @@ isDownloaded: boolean;
  */
 comicDownloadDir: string }
 export type CommandError = { err_title: string; err_message: string }
-export type Config = { cookie: string; downloadDir: string; exportDir: string; enableFileLogger: boolean; chapterConcurrency: number; chapterDownloadIntervalSec: number; imgConcurrency: number; imgDownloadIntervalSec: number; updateGetComicIntervalSec: number; proxyMode: ProxyMode; proxyHost: string; proxyPort: number; comicDirFmt: string; chapterDirFmt: string }
+export type Config = { cookie: string; downloadDir: string; exportDir: string; enableFileLogger: boolean; chapterConcurrency: number; chapterDownloadIntervalSec: number; imgConcurrency: number; imgDownloadIntervalSec: number; updateGetComicIntervalSec: number; proxyMode: ProxyMode; proxyHost: string; proxyPort: number; comicDirFmt: string; chapterDirFmt: string; createPdfConcurrency: number; enableMergePdf: boolean }
 export type DownloadSleepingEvent = { chapterId: number; remainingSec: number }
 export type DownloadSpeedEvent = { speed: string }
 export type DownloadTaskEvent = { event: "Create"; data: { state: DownloadTaskState; comic: Comic; chapterInfo: ChapterInfo; downloadedImgCount: number; totalImgCount: number } } | { event: "Update"; data: { state: DownloadTaskState; chapterId: number; downloadedImgCount: number; totalImgCount: number } }
