@@ -300,7 +300,7 @@ const ChapterCheckbox = defineComponent({
       <div class="flex p-2 pt-0">
         <img class="w-24 mr-4 object-cover" :src="store.pickedComic.cover" alt="" />
         <div class="flex flex-col h-full">
-          <span class="font-bold text-xl line-clamp-3">
+          <span class="font-bold text-lg line-clamp-2 ">
             {{ store.pickedComic.title }}
             {{ store.pickedComic.subtitle ? `(${store.pickedComic.subtitle})` : '' }}
           </span>

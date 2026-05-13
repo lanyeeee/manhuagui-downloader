@@ -294,9 +294,9 @@ const UncompletedProgress = defineComponent({
 </script>
 
 <template>
-  <div class="uncompleted-progresses-selection-container h-full flex flex-col" @contextmenu="showDropdown">
+  <div class="uncompleted-progresses-selection-container h-full flex flex-col px-2" @contextmenu="showDropdown">
     <selection-area ref="selectionAreaRef" :options="selectionOptions" @move="updateSelectedIds" @start="unselectAll" />
-    <span class="mr-auto select-none" @contextmenu="showDropdown">左键拖动进行框选，右键打开菜单，双击暂停/继续</span>
+    <span class="ml-auto select-none" @contextmenu="showDropdown">左键拖动进行框选，右键打开菜单，双击暂停/继续</span>
     <div class="h-full select-none">
       <UncompletedProgress
         ref="selectableRefs"
