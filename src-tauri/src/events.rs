@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, path::PathBuf};
 
 use serde::{Deserialize, Serialize};
 use specta::Type;
@@ -60,7 +60,10 @@ pub enum ExportCbzEvent {
     Error { uuid: String },
 
     #[serde(rename_all = "camelCase")]
-    End { uuid: String },
+    End {
+        uuid: String,
+        chapter_export_dir: PathBuf,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type, Event)]
@@ -80,7 +83,10 @@ pub enum ExportPdfEvent {
     CreateError { uuid: String },
 
     #[serde(rename_all = "camelCase")]
-    CreateEnd { uuid: String },
+    CreateEnd {
+        uuid: String,
+        chapter_export_dir: PathBuf,
+    },
 
     #[serde(rename_all = "camelCase")]
     MergeStart {
@@ -96,7 +102,10 @@ pub enum ExportPdfEvent {
     MergeError { uuid: String },
 
     #[serde(rename_all = "camelCase")]
-    MergeEnd { uuid: String },
+    MergeEnd {
+        uuid: String,
+        chapter_export_dir: PathBuf,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type, Event)]

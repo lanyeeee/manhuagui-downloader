@@ -184,7 +184,11 @@ pub fn cbz(app: &AppHandle, comic: &Comic) -> anyhow::Result<()> {
     // 标记为成功，后面drop时就不会发送Error事件
     error_event_guard.success = true;
     // 发送导出cbz完成事件
-    let _ = ExportCbzEvent::End { uuid: event_uuid }.emit(app);
+    let _ = ExportCbzEvent::End {
+        uuid: event_uuid,
+        chapter_export_dir: cbz_export_dir,
+    }
+    .emit(app);
 
     Ok(())
 }
@@ -319,6 +323,7 @@ pub fn pdf(app: &AppHandle, comic: &Comic) -> anyhow::Result<()> {
     // 发送创建pdf完成事件
     let _ = ExportPdfEvent::CreateEnd {
         uuid: create_event_uuid,
+        chapter_export_dir: pdf_export_dir.clone(),
     }
     .emit(app);
 
@@ -392,6 +397,7 @@ pub fn pdf(app: &AppHandle, comic: &Comic) -> anyhow::Result<()> {
     // 发送合并pdf完成事件
     let _ = ExportPdfEvent::MergeEnd {
         uuid: merge_event_uuid,
+        chapter_export_dir: pdf_export_dir.clone(),
     }
     .emit(app);
     Ok(())

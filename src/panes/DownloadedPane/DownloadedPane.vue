@@ -1,32 +1,14 @@
 <script setup lang="ts">
-import { Comic, commands, events } from '../../bindings.ts'
+import { Comic, commands } from '../../bindings.ts'
 import DownloadedComicCard from './components/DownloadedComicCard.vue'
 import { open } from '@tauri-apps/plugin-dialog'
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useStore } from '../../store.ts'
-import {
-  MessageReactive,
-  NButton,
-  NIcon,
-  NInput,
-  NInputGroup,
-  NInputGroupLabel,
-  NPagination,
-  useMessage,
-} from 'naive-ui'
+import { NButton, NIcon, NInput, NInputGroup, NInputGroupLabel, NPagination } from 'naive-ui'
 import { PhFolderOpen } from '@phosphor-icons/vue'
 import UpdateDownloadedComicsButton from './components/UpdateDownloadedComicsButton.vue'
 
-interface ProgressData {
-  comicTitle: string
-  current: number
-  totalImgCount: number
-  progressMessage: MessageReactive
-}
-
 const store = useStore()
-
-const message = useMessage()
 
 const downloadedComics = ref<Comic[]>([])
 const currentPage = ref<number>(1)
@@ -56,152 +38,6 @@ watch(
   },
   { immediate: true },
 )
-
-const progresses = ref<Map<string, ProgressData>>(new Map())
-let unListenExportCbzEvent: () => void | undefined
-let unListenExportPdfEvent: () => void | undefined
-onMounted(() => {
-  events.exportCbzEvent
-    .listen(async ({ payload: exportCbzEvent }) => {
-      if (exportCbzEvent.event === 'Start') {
-        const { uuid, comicTitle, total } = exportCbzEvent.data
-        progresses.value.set(uuid, {
-          comicTitle,
-          current: 0,
-          totalImgCount: total,
-          progressMessage: message.loading(`${comicTitle} 正在导出cbz(0/${total})`, { duration: 0 }),
-        })
-      } else if (exportCbzEvent.event === 'Progress') {
-        const { uuid, current } = exportCbzEvent.data
-        const progressData = progresses.value.get(uuid)
-        if (progressData === undefined) {
-          return
-        }
-        progressData.current = current
-        progressData.progressMessage.content = `${progressData.comicTitle} 正在导出cbz(${current}/${progressData.totalImgCount})`
-      } else if (exportCbzEvent.event === 'Error') {
-        const { uuid } = exportCbzEvent.data
-        const progressData = progresses.value.get(uuid)
-        if (progressData === undefined) {
-          return
-        }
-        progressData.progressMessage.type = 'error'
-        progressData.progressMessage.content = `${progressData.comicTitle} 导出cbz失败(${progressData.totalImgCount}/${progressData.totalImgCount})`
-        setTimeout(() => {
-          progressData.progressMessage.destroy()
-          progresses.value.delete(uuid)
-        }, 3000)
-      } else if (exportCbzEvent.event === 'End') {
-        const { uuid } = exportCbzEvent.data
-        const progressData = progresses.value.get(uuid)
-        if (progressData === undefined) {
-          return
-        }
-        progressData.progressMessage.type = 'success'
-        progressData.progressMessage.content = `${progressData.comicTitle} 导出cbz完成(${progressData.totalImgCount}/${progressData.totalImgCount})`
-        setTimeout(() => {
-          progressData.progressMessage.destroy()
-          progresses.value.delete(uuid)
-        }, 3000)
-      }
-    })
-    .then((unListenFn) => {
-      unListenExportCbzEvent = unListenFn
-    })
-
-  events.exportPdfEvent
-    .listen(async ({ payload: exportPdfEvent }) => {
-      if (exportPdfEvent.event === 'CreateStart') {
-        const { uuid, comicTitle, total } = exportPdfEvent.data
-        progresses.value.set(uuid, {
-          comicTitle,
-          current: 0,
-          totalImgCount: total,
-          progressMessage: message.loading(`${comicTitle} 正在导出pdf(0/${total})`, { duration: 0 }),
-        })
-      } else if (exportPdfEvent.event === 'CreateProgress') {
-        const { uuid, current } = exportPdfEvent.data
-        const progressData = progresses.value.get(uuid)
-        if (progressData === undefined) {
-          return
-        }
-        progressData.current = current
-        progressData.progressMessage.content = `${progressData.comicTitle} 正在导出pdf(${current}/${progressData.totalImgCount})`
-      } else if (exportPdfEvent.event === 'CreateError') {
-        const { uuid } = exportPdfEvent.data
-        const progressData = progresses.value.get(uuid)
-        if (progressData === undefined) {
-          return
-        }
-        progressData.progressMessage.type = 'error'
-        progressData.progressMessage.content = `${progressData.comicTitle} 导出pdf失败(${progressData.totalImgCount}/${progressData.totalImgCount})`
-        setTimeout(() => {
-          progressData.progressMessage.destroy()
-          progresses.value.delete(uuid)
-        }, 3000)
-      } else if (exportPdfEvent.event === 'CreateEnd') {
-        const { uuid } = exportPdfEvent.data
-        const progressData = progresses.value.get(uuid)
-        if (progressData === undefined) {
-          return
-        }
-        progressData.progressMessage.type = 'success'
-        progressData.progressMessage.content = `${progressData.comicTitle} 导出pdf完成(${progressData.totalImgCount}/${progressData.totalImgCount})`
-        setTimeout(() => {
-          progressData.progressMessage.destroy()
-          progresses.value.delete(uuid)
-        }, 3000)
-      } else if (exportPdfEvent.event === 'MergeStart') {
-        const { uuid, comicTitle, total } = exportPdfEvent.data
-        progresses.value.set(uuid, {
-          comicTitle,
-          current: 0,
-          totalImgCount: total,
-          progressMessage: message.loading(`${comicTitle} 正在合并pdf(0/${total})`, { duration: 0 }),
-        })
-      } else if (exportPdfEvent.event === 'MergeProgress') {
-        const { uuid, current } = exportPdfEvent.data
-        const progressData = progresses.value.get(uuid)
-        if (progressData === undefined) {
-          return
-        }
-        progressData.current = current
-        progressData.progressMessage.content = `${progressData.comicTitle} 正在合并pdf(${current}/${progressData.totalImgCount})`
-      } else if (exportPdfEvent.event === 'MergeError') {
-        const { uuid } = exportPdfEvent.data
-        const progressData = progresses.value.get(uuid)
-        if (progressData === undefined) {
-          return
-        }
-        progressData.progressMessage.type = 'error'
-        progressData.progressMessage.content = `${progressData.comicTitle} 合并pdf失败(${progressData.totalImgCount}/${progressData.totalImgCount})`
-        setTimeout(() => {
-          progressData.progressMessage.destroy()
-          progresses.value.delete(uuid)
-        }, 3000)
-      } else if (exportPdfEvent.event === 'MergeEnd') {
-        const { uuid } = exportPdfEvent.data
-        const progressData = progresses.value.get(uuid)
-        if (progressData === undefined) {
-          return
-        }
-        progressData.progressMessage.type = 'success'
-        progressData.progressMessage.content = `${progressData.comicTitle} 合并pdf完成(${progressData.totalImgCount}/${progressData.totalImgCount})`
-        setTimeout(() => {
-          progressData.progressMessage.destroy()
-          progresses.value.delete(uuid)
-        }, 3000)
-      }
-    })
-    .then((unListenFn) => {
-      unListenExportPdfEvent = unListenFn
-    })
-})
-
-onUnmounted(() => {
-  unListenExportCbzEvent?.()
-  unListenExportPdfEvent?.()
-})
 
 async function selectExportDir() {
   if (store.config === undefined) {

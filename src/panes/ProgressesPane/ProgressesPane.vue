@@ -8,6 +8,9 @@ import CompletedProgresses from './components/CompletedProgresses.vue'
 import { useStore } from '../../store.ts'
 import { ProgressData } from '../../types.ts'
 import { NButton, NIcon, NInput, NInputGroup, NInputGroupLabel, NTabPane, NTabs } from 'naive-ui'
+import ExportProgresses from './components/ExportProgresses.vue'
+
+export type ProgressesPaneTabName = 'uncompleted' | 'completed' | 'export'
 
 const store = useStore()
 
@@ -180,13 +183,22 @@ async function showDownloadDirInFileManager() {
       </n-input-group>
     </div>
 
-    <n-tabs class="overflow-auto h-full mt-2" type="line" size="small" animated>
+    <n-tabs
+      class="overflow-auto h-full mt-2"
+      v-model:value="store.progressesPaneTabName"
+      type="line"
+      size="small"
+      animated>
       <n-tab-pane class="h-full p-0! overflow-auto" name="uncompleted" tab="未完成">
-        <uncompleted-progresses />
+        <UncompletedProgresses />
       </n-tab-pane>
 
       <n-tab-pane class="h-full p-0! overflow-auto" name="completed" tab="已完成">
-        <completed-progresses />
+        <CompletedProgresses />
+      </n-tab-pane>
+
+      <n-tab-pane class="h-full p-0! overflow-auto" name="export" tab="导出进度" display-directive="show">
+        <ExportProgresses />
       </n-tab-pane>
 
       <template #suffix>
