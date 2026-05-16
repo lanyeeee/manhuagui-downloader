@@ -497,26 +497,43 @@ fn get_groups(
     comic_title: &str,
     comic_status: &str,
 ) -> anyhow::Result<HashMap<String, Vec<ChapterInfo>>> {
-    let h4s = chapter_div
+    let mut group_names = chapter_div
         .select(&Selector::parse("h4").to_anyhow()?)
+        .map(|h4| h4.text().next().unwrap_or_default().trim().to_string())
         .collect::<Vec<_>>();
 
     let chapter_divs = chapter_div
         .select(&Selector::parse(".chapter-list").to_anyhow()?)
         .collect::<Vec<_>>();
 
-    if h4s.len() != chapter_divs.len() {
-        return Err(anyhow!("章节组名和章节列表数量不一致"));
+    // 保证 group_names.len() == chapter_divs.len()
+    while group_names.len() < chapter_divs.len() {
+        group_names.push(String::new());
+    }
+
+    let empty_count = group_names.iter().filter(|s| s.is_empty()).count();
+    let mut empty_index = 0;
+
+    let mut group_name_and_chapter_divs = group_names
+        .into_iter()
+        .zip(chapter_divs)
+        .collect::<Vec<_>>();
+
+    for (group_name, _) in &mut group_name_and_chapter_divs {
+        if !group_name.is_empty() {
+            continue;
+        }
+        // 处理没有group_name的情况
+        empty_index += 1;
+        if empty_count == 1 {
+            *group_name = "其他".to_string();
+        } else {
+            *group_name = format!("其他{empty_index}");
+        }
     }
 
     let mut groups = HashMap::new();
-    for (h4, chapter_list_div) in h4s.iter().zip(chapter_divs.iter()) {
-        let group_name = h4
-            .text()
-            .next()
-            .context("没有在章节组名的<h4>中找到文本")?
-            .trim()
-            .to_string();
+    for (group_name, chapter_list_div) in group_name_and_chapter_divs {
         let group_name = filename_filter(&group_name);
 
         let uls = chapter_list_div
