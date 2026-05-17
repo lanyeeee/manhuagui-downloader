@@ -12,7 +12,7 @@ use walkdir::WalkDir;
 
 use crate::{
     extensions::{AppHandleExt, ToAnyhow, WalkDirEntryExt},
-    types::ChapterInfo,
+    types::{ChapterDirFmtParams, ChapterInfo},
     utils::{self, filename_filter},
 };
 
@@ -334,6 +334,117 @@ impl Comic {
         Ok(comic_export_dir)
     }
 
+    pub fn ensure_download_dir_fields(&mut self, app: &AppHandle) -> anyhow::Result<()> {
+        if self.has_download_dir_fields() {
+            return Ok(());
+        }
+
+        self.update_download_dir_fields_by_fmt(app)
+    }
+
+    pub fn has_download_dir_fields(&self) -> bool {
+        let comic_download_dir_ready = self.comic_download_dir.is_some();
+        let chapter_download_dir_ready = self
+            .groups
+            .values()
+            .flatten()
+            .all(|chapter| chapter.chapter_download_dir.is_some());
+
+        comic_download_dir_ready && chapter_download_dir_ready
+    }
+
+    /// 根据fmt更新`comic_download_dir`和`chapter_infos.chapter_download_dir`字段
+    pub fn update_download_dir_fields_by_fmt(&mut self, app: &AppHandle) -> anyhow::Result<()> {
+        let comic_id = self.id;
+        let comic_title = self.title.clone();
+        let comic_subtitle = self.subtitle.clone().unwrap_or_default();
+        let author = self.authors.join(", ");
+
+        let comic_dir_fmt_params = ComicDirFmtParams {
+            comic_id,
+            comic_title: comic_title.clone(),
+            comic_subtitle: comic_subtitle.clone(),
+            pub_year: self.year,
+            region: self.region.clone(),
+            author: author.clone(),
+        };
+        let comic_download_dir = Comic::get_comic_download_dir_by_fmt(app, &comic_dir_fmt_params)?;
+        self.comic_download_dir = Some(comic_download_dir.clone());
+
+        for chapter_info in &mut self.groups.values_mut().flatten() {
+            let chapter_dir_fmt_params = ChapterDirFmtParams {
+                comic_id,
+                comic_title: comic_title.clone(),
+                comic_subtitle: comic_subtitle.clone(),
+                pub_year: self.year,
+                region: self.region.clone(),
+                author: author.clone(),
+                group_name: chapter_info.group_name.clone(),
+                chapter_id: chapter_info.chapter_id,
+                chapter_title: chapter_info.chapter_title.clone(),
+                order: chapter_info.order,
+            };
+            let chapter_download_dir = ChapterInfo::get_chapter_download_dir_by_fmt(
+                app,
+                &comic_download_dir,
+                &chapter_dir_fmt_params,
+            )?;
+            chapter_info.chapter_download_dir = Some(chapter_download_dir);
+        }
+
+        Ok(())
+    }
+
+    pub fn get_comic_download_dir_by_fmt(
+        app: &AppHandle,
+        fmt_params: &ComicDirFmtParams,
+    ) -> anyhow::Result<PathBuf> {
+        use strfmt::strfmt;
+
+        let json_value = serde_json::to_value(fmt_params)
+            .context("将ComicDirFmtParams转为serde_json::Value失败")?;
+
+        let json_map = json_value
+            .as_object()
+            .context("ComicDirFmtParams不是JSON对象")?;
+
+        let vars: HashMap<String, String> = json_map
+            .iter()
+            .map(|(k, v)| {
+                let key = k.clone();
+                let value = match v {
+                    serde_json::Value::String(s) => s.clone(),
+                    _ => v.to_string(),
+                };
+                (key, value)
+            })
+            .collect();
+
+        let (download_dir, comic_dir_fmt) = {
+            let config = app.get_config();
+            let config = config.read();
+            (config.download_dir.clone(), config.comic_dir_fmt.clone())
+        };
+
+        let dir_fmt_parts: Vec<&str> = comic_dir_fmt.split('/').collect();
+
+        let mut dir_names = Vec::new();
+        for fmt in dir_fmt_parts {
+            let dir_name = strfmt(fmt, &vars).context("格式化目录名失败")?;
+            let dir_name = utils::filename_filter(&dir_name);
+            if !dir_name.is_empty() {
+                dir_names.push(dir_name);
+            }
+        }
+
+        let mut comic_download_dir = download_dir;
+        for dir_name in dir_names {
+            comic_download_dir = comic_download_dir.join(dir_name);
+        }
+
+        Ok(comic_download_dir)
+    }
+
     fn create_chapter_metadata_for_old_version(
         &self,
         comic_download_dir: &Path,
@@ -382,6 +493,16 @@ impl Comic {
 
         Ok(())
     }
+}
+
+#[derive(Default, Debug, PartialEq, Clone, Serialize, Deserialize, Type)]
+pub struct ComicDirFmtParams {
+    pub comic_id: i64,
+    pub comic_title: String,
+    pub comic_subtitle: String,
+    pub pub_year: i64,
+    pub region: String,
+    pub author: String,
 }
 
 fn get_title_and_subtitle(

@@ -5,37 +5,33 @@ use specta::Type;
 use tauri_specta::Event;
 
 use crate::{
-    download_manager::DownloadTaskState,
+    downloader::download_task_state::DownloadTaskState,
     types::{ChapterInfo, Comic, LogLevel},
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type, Event)]
-#[serde(rename_all = "camelCase")]
-pub struct DownloadSpeedEvent {
-    pub speed: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Type, Event)]
-#[serde(rename_all = "camelCase")]
-pub struct DownloadSleepingEvent {
-    pub chapter_id: i64,
-    pub remaining_sec: u64,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Type, Event)]
 #[serde(tag = "event", content = "data")]
-pub enum DownloadTaskEvent {
+pub enum DownloadEvent {
     #[serde(rename_all = "camelCase")]
-    Create {
+    Speed { speed: String },
+
+    #[serde(rename_all = "camelCase")]
+    Sleeping { chapter_id: i64, remaining_sec: u64 },
+
+    #[serde(rename_all = "camelCase")]
+    TaskCreate {
         state: DownloadTaskState,
-        comic: Comic,
-        chapter_info: ChapterInfo,
+        comic: Box<Comic>,
+        chapter_info: Box<ChapterInfo>,
         downloaded_img_count: u32,
         total_img_count: u32,
     },
 
     #[serde(rename_all = "camelCase")]
-    Update {
+    TaskDelete { chapter_id: i64 },
+
+    #[serde(rename_all = "camelCase")]
+    TaskUpdate {
         state: DownloadTaskState,
         chapter_id: i64,
         downloaded_img_count: u32,

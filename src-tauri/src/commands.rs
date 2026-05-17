@@ -469,15 +469,15 @@ pub fn resume_download_task(app: AppHandle, chapter_id: i64) -> CommandResult<()
 #[allow(clippy::needless_pass_by_value)]
 #[tauri::command(async)]
 #[specta::specta]
-pub fn cancel_download_task(app: AppHandle, chapter_id: i64) -> CommandResult<()> {
+pub fn delete_download_task(app: AppHandle, chapter_id: i64) -> CommandResult<()> {
     let download_manager = app.get_download_manager();
 
     download_manager
-        .cancel_download_task(chapter_id)
+        .delete_download_task(chapter_id)
         .map_err(|err| {
-            CommandError::from(&format!("取消章节ID为`{chapter_id}`的下载任务失败"), err)
+            CommandError::from(&format!("删除章节ID为`{chapter_id}`的下载任务失败"), err)
         })?;
-    tracing::debug!("取消章节ID为`{chapter_id}`的下载任务成功");
+    tracing::debug!("删除章节ID为`{chapter_id}`的下载任务成功");
     Ok(())
 }
 

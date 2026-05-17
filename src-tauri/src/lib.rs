@@ -1,7 +1,7 @@
 mod commands;
 mod config;
 mod decrypt;
-mod download_manager;
+mod downloader;
 mod errors;
 mod events;
 mod export;
@@ -13,16 +13,17 @@ mod utils;
 
 use anyhow::Context;
 use config::Config;
-use download_manager::DownloadManager;
-use events::{
-    DownloadSleepingEvent, DownloadSpeedEvent, DownloadTaskEvent, ExportCbzEvent, ExportPdfEvent,
-    LogEvent, UpdateDownloadedComicsEvent,
-};
 use manhuagui_client::ManhuaguiClient;
 use parking_lot::RwLock;
 use tauri::{Manager, Wry};
 
-use crate::commands::*;
+use crate::{
+    commands::*,
+    downloader::download_manager::DownloadManager,
+    events::{
+        DownloadEvent, ExportCbzEvent, ExportPdfEvent, LogEvent, UpdateDownloadedComicsEvent,
+    },
+};
 
 fn generate_context() -> tauri::Context<Wry> {
     tauri::generate_context!()
@@ -49,15 +50,13 @@ pub fn run() {
             create_download_task,
             pause_download_task,
             resume_download_task,
-            cancel_download_task,
+            delete_download_task,
             get_synced_comic,
             get_synced_comic_in_favorite,
             get_synced_comic_in_search,
         ])
         .events(tauri_specta::collect_events![
-            DownloadSleepingEvent,
-            DownloadSpeedEvent,
-            DownloadTaskEvent,
+            DownloadEvent,
             ExportCbzEvent,
             ExportPdfEvent,
             UpdateDownloadedComicsEvent,

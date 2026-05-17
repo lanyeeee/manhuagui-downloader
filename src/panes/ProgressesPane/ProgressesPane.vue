@@ -16,33 +16,19 @@ const store = useStore()
 
 const downloadSpeed = ref<string>('')
 
-let unListenDownloadSpeedEvent: () => void | undefined
-let unListenDownloadSleepingEvent: () => void | undefined
-let unListenDownloadTaskEvent: () => void | undefined
+let unListenDownloadEvent: () => void | undefined
 
 onMounted(() => {
-  events.downloadSpeedEvent
-    .listen(async ({ payload: { speed } }) => {
-      downloadSpeed.value = speed
-    })
-    .then((unListenFn) => {
-      unListenDownloadSpeedEvent = unListenFn
-    })
-
-  events.downloadSleepingEvent
-    .listen(async ({ payload: { chapterId, remainingSec } }) => {
-      const progressData = store.progresses.get(chapterId)
-      if (progressData !== undefined) {
-        progressData.indicator = `将在${remainingSec}秒后继续下载`
-      }
-    })
-    .then((unListenFn) => {
-      unListenDownloadSleepingEvent = unListenFn
-    })
-
-  events.downloadTaskEvent
+  events.downloadEvent
     .listen(async ({ payload: { event, data } }) => {
-      if (event === 'Create') {
+      if (event === 'Speed') {
+        downloadSpeed.value = data.speed
+      } else if (event === 'Sleeping') {
+        const progressData = store.progresses.get(data.chapterId)
+        if (progressData !== undefined) {
+          progressData.indicator = `将在${data.remainingSec}秒后继续下载`
+        }
+      } else if (event === 'TaskCreate') {
         const { chapterInfo, downloadedImgCount, totalImgCount } = data
 
         store.progresses.set(chapterInfo.chapterId, {
@@ -50,7 +36,7 @@ onMounted(() => {
           percentage: 0,
           indicator: `排队中 ${downloadedImgCount}/${totalImgCount}`,
         })
-      } else if (event === 'Update') {
+      } else if (event === 'TaskUpdate') {
         const { state, chapterId, downloadedImgCount, totalImgCount } = data
 
         const progressData = store.progresses.get(chapterId)
@@ -77,8 +63,6 @@ onMounted(() => {
           indicator = '下载中'
         } else if (state === 'Paused') {
           indicator = '已暂停'
-        } else if (state === 'Cancelled') {
-          indicator = '已取消'
         } else if (state === 'Completed') {
           indicator = '下载完成'
         } else if (state === 'Failed') {
@@ -90,17 +74,17 @@ onMounted(() => {
         }
 
         progressData.indicator = indicator
+      } else if (event === 'TaskDelete') {
+        store.progresses.delete(data.chapterId)
       }
     })
     .then((unListenFn) => {
-      unListenDownloadTaskEvent = unListenFn
+      unListenDownloadEvent = unListenFn
     })
 })
 
 onUnmounted(() => {
-  unListenDownloadSpeedEvent?.()
-  unListenDownloadSleepingEvent?.()
-  unListenDownloadTaskEvent?.()
+  unListenDownloadEvent?.()
 })
 
 async function syncPickedComic() {
