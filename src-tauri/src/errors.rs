@@ -1,7 +1,7 @@
 use serde::Serialize;
 use specta::Type;
 
-use crate::extensions::AnyhowErrorToStringChain;
+use crate::extensions::ReportToStringChain;
 
 pub type CommandResult<T> = Result<T, CommandError>;
 
@@ -14,7 +14,7 @@ pub struct CommandError {
 impl CommandError {
     pub fn from<E>(err_title: &str, err: E) -> Self
     where
-        E: Into<anyhow::Error>,
+        E: Into<eyre::Report>,
     {
         let string_chain = err.into().to_string_chain();
         tracing::error!(err_title, message = string_chain);

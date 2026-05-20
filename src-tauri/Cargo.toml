@@ -35,7 +35,7 @@ reqwest = { version = "0.12.9", default-features = false }
 reqwest-retry = { version = "0.7.0" }
 reqwest-middleware = { version = "0.4.0" }
 
-anyhow = { version = "1.0.91" }
+eyre = { version = "0.6.12" }
 parking_lot = { version = "0.12.3", features = ["send_guard"] }
 scraper = { version = "0.22.0" }
 lz-str = { version = "0.2.1" }

@@ -7,7 +7,7 @@ use std::{
     time::Duration,
 };
 
-use anyhow::Context;
+use eyre::{OptionExt, WrapErr};
 use tauri::AppHandle;
 use tauri_specta::Event;
 use tokio::{
@@ -19,7 +19,7 @@ use tokio::{
 use crate::{
     downloader::{download_img_task::DownloadImgTask, download_task_state::DownloadTaskState},
     events::DownloadEvent,
-    extensions::{AnyhowErrorToStringChain, AppHandleExt},
+    extensions::{AppHandleExt, ReportToStringChain},
     manhuagui_client::ManhuaguiClient,
     types::{ChapterInfo, Comic},
 };
@@ -35,10 +35,10 @@ pub struct DownloadTask {
 }
 
 impl DownloadTask {
-    pub fn new(app: AppHandle, mut comic: Comic, chapter_id: i64) -> anyhow::Result<Arc<Self>> {
+    pub fn new(app: AppHandle, mut comic: Comic, chapter_id: i64) -> eyre::Result<Arc<Self>> {
         comic
             .ensure_download_dir_fields(&app)
-            .context(format!("漫画`{}`更新`download_dir`字段失败", comic.title))?;
+            .wrap_err(format!("漫画`{}`更新`download_dir`字段失败", comic.title))?;
 
         let chapter_info = comic
             .groups
@@ -46,7 +46,7 @@ impl DownloadTask {
             .flat_map(|(_, chapter_infos)| chapter_infos.iter())
             .find(|chapter_info| chapter_info.chapter_id == chapter_id)
             .cloned()
-            .context(format!("未找到章节ID为`{chapter_id}`的章节信息"))?;
+            .ok_or_eyre(format!("未找到章节ID为`{chapter_id}`的章节信息"))?;
 
         let (state_sender, _) = watch::channel(DownloadTaskState::Pending);
         let (delete_sender, _) = watch::channel(());
@@ -258,7 +258,7 @@ impl DownloadTask {
             }
         };
 
-        if let Err(err) = std::fs::create_dir_all(&temp_download_dir).map_err(anyhow::Error::from) {
+        if let Err(err) = std::fs::create_dir_all(&temp_download_dir).map_err(eyre::Report::from) {
             let err_title = format!(
                 "`{comic_title} - {group_name} - {chapter_title}`创建目录`{}`失败",
                 temp_download_dir.display()
@@ -284,19 +284,19 @@ impl DownloadTask {
         Some(temp_download_dir)
     }
 
-    fn rename_temp_download_dir(&self, temp_download_dir: &Path) -> anyhow::Result<()> {
+    fn rename_temp_download_dir(&self, temp_download_dir: &Path) -> eyre::Result<()> {
         let chapter_download_dir = self
             .chapter_info
             .chapter_download_dir
             .as_ref()
-            .context("`chapter_download_dir`字段为`None`")?;
+            .ok_or_eyre("`chapter_download_dir`字段为`None`")?;
 
         if chapter_download_dir.exists() {
             std::fs::remove_dir_all(chapter_download_dir)
-                .context(format!("删除`{}`失败", chapter_download_dir.display()))?;
+                .wrap_err(format!("删除`{}`失败", chapter_download_dir.display()))?;
         }
 
-        std::fs::rename(temp_download_dir, chapter_download_dir).context(format!(
+        std::fs::rename(temp_download_dir, chapter_download_dir).wrap_err(format!(
             "将`{}`重命名为`{}`失败",
             temp_download_dir.display(),
             chapter_download_dir.display()
@@ -330,7 +330,7 @@ impl DownloadTask {
                 .chapter_sem
                 .acquire()
                 .await
-                .map_err(anyhow::Error::from)
+                .map_err(eyre::Report::from)
             {
                 Ok(permit) => Some(permit),
                 Err(err) => {
@@ -354,7 +354,7 @@ impl DownloadTask {
         if let Err(err) = self
             .state_sender
             .send(DownloadTaskState::Downloading)
-            .map_err(anyhow::Error::from)
+            .map_err(eyre::Report::from)
         {
             let err_title = format!(
                 "`{comic_title} - {group_name} - {chapter_title}`发送状态`Downloading`失败"
@@ -438,7 +438,7 @@ impl DownloadTask {
         let comic_title = &self.chapter_info.comic_title;
         let group_name = &self.chapter_info.group_name;
         let chapter_title = &self.chapter_info.chapter_title;
-        if let Err(err) = self.state_sender.send(state).map_err(anyhow::Error::from) {
+        if let Err(err) = self.state_sender.send(state).map_err(eyre::Report::from) {
             let err_title =
                 format!("`{comic_title} - {group_name} - {chapter_title}`发送状态`{state:?}`失败");
             let string_chain = err.to_string_chain();

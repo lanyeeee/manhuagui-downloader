@@ -12,7 +12,7 @@ use tokio::{
 
 use crate::{
     downloader::{download_task::DownloadTask, download_task_state::DownloadTaskState},
-    extensions::{AnyhowErrorToStringChain, AppHandleExt},
+    extensions::{AppHandleExt, ReportToStringChain},
     manhuagui_client::ManhuaguiClient,
 };
 
@@ -126,7 +126,7 @@ impl DownloadImgTask {
             "图片成功下载到内存"
         );
 
-        if let Err(err) = std::fs::write(&save_path, &img_data).map_err(anyhow::Error::from) {
+        if let Err(err) = std::fs::write(&save_path, &img_data).map_err(eyre::Report::from) {
             let err_title = format!("保存图片`{}`失败", save_path.display());
             let string_chain = err.to_string_chain();
             tracing::error!(err_title, message = string_chain);
@@ -175,7 +175,7 @@ impl DownloadImgTask {
                 .img_sem
                 .acquire()
                 .await
-                .map_err(anyhow::Error::from)
+                .map_err(eyre::Report::from)
             {
                 Ok(permit) => Some(permit),
                 Err(err) => {

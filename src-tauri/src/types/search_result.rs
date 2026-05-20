@@ -1,12 +1,12 @@
 use std::{collections::HashMap, path::PathBuf};
 
-use anyhow::Context;
+use eyre::{OptionExt, WrapErr};
 use scraper::{ElementRef, Html, Selector};
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use tauri::AppHandle;
 
-use crate::{extensions::ToAnyhow, utils};
+use crate::{extensions::ToEyre, utils};
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
@@ -17,12 +17,12 @@ pub struct SearchResult {
 }
 
 impl SearchResult {
-    pub fn from_html(app: &AppHandle, html: &str) -> anyhow::Result<SearchResult> {
+    pub fn from_html(app: &AppHandle, html: &str) -> eyre::Result<SearchResult> {
         let id_to_dir_map =
-            utils::create_id_to_dir_map(app).context("创建漫画ID到下载目录映射失败")?;
+            utils::create_id_to_dir_map(app).wrap_err("创建漫画ID到下载目录映射失败")?;
 
         let document = Html::parse_document(html);
-        let book_result_selector = Selector::parse(".book-result .cf").to_anyhow()?;
+        let book_result_selector = Selector::parse(".book-result .cf").to_eyre()?;
 
         let mut comics = Vec::new();
         for book_li in document.select(&book_result_selector) {
@@ -31,27 +31,27 @@ impl SearchResult {
         }
 
         let current = match document
-            .select(&Selector::parse(".current").to_anyhow()?)
+            .select(&Selector::parse(".current").to_eyre()?)
             .next()
         {
             Some(span) => span
                 .text()
                 .next()
-                .context("没有在当前页码的span中找到文本")?
+                .ok_or_eyre("没有在当前页码的span中找到文本")?
                 .parse::<i64>()
-                .context("当前页码不是整数")?,
+                .wrap_err("当前页码不是整数")?,
             None => 1,
         };
 
         let total = document
-            .select(&Selector::parse(".result-count strong").to_anyhow()?)
+            .select(&Selector::parse(".result-count strong").to_eyre()?)
             .nth(1)
-            .context("没有找到总结果数的<strong>")?
+            .ok_or_eyre("没有找到总结果数的<strong>")?
             .text()
             .next()
-            .context("没有在总结果数的<strong>中找到文本")?
+            .ok_or_eyre("没有在总结果数的<strong>中找到文本")?
             .parse::<i64>()
-            .context("总结果数不是整数")?;
+            .wrap_err("总结果数不是整数")?;
 
         Ok(SearchResult {
             comics,
@@ -98,58 +98,58 @@ impl ComicInSearch {
     pub fn from_li(
         li: &ElementRef,
         id_to_dir_map: &HashMap<i64, PathBuf>,
-    ) -> anyhow::Result<ComicInSearch> {
+    ) -> eyre::Result<ComicInSearch> {
         let book_detail_div = li
-            .select(&Selector::parse(".book-detail").to_anyhow()?)
+            .select(&Selector::parse(".book-detail").to_eyre()?)
             .next()
-            .context("没有找到书籍详情的<div>")?;
+            .ok_or_eyre("没有找到书籍详情的<div>")?;
 
         let dt = book_detail_div
-            .select(&Selector::parse("dt").to_anyhow()?)
+            .select(&Selector::parse("dt").to_eyre()?)
             .next()
-            .context("没有找到漫画标题和链接的<dt>")?;
+            .ok_or_eyre("没有找到漫画标题和链接的<dt>")?;
         let (id, title, subtitle) = get_id_and_title_and_subtitle(dt)?;
 
         let cover_src = li
-            .select(&Selector::parse(".book-cover img").to_anyhow()?)
+            .select(&Selector::parse(".book-cover img").to_eyre()?)
             .next()
-            .context("没有找到封面的<img>")?
+            .ok_or_eyre("没有找到封面的<img>")?
             .value()
             .attr("src")
-            .context("没有在封面的<img>中找到src属性")?;
+            .ok_or_eyre("没有在封面的<img>中找到src属性")?;
         let cover = format!("https:{cover_src}");
 
         let dds = book_detail_div
-            .select(&Selector::parse("dd").to_anyhow()?)
+            .select(&Selector::parse("dd").to_eyre()?)
             .collect::<Vec<_>>();
 
-        let status_dd = dds.first().context("没有找到漫画状态和更新时间的dd")?;
+        let status_dd = dds.first().ok_or_eyre("没有找到漫画状态和更新时间的dd")?;
         let (status, update_time) = get_status_and_update_time(status_dd)?;
 
-        let info_dd = dds.get(1).context("没有找到年份、地区、类型的dd")?;
+        let info_dd = dds.get(1).ok_or_eyre("没有找到年份、地区、类型的dd")?;
         let (year, region, genres) = get_year_and_region_and_genres(info_dd)?;
 
         let authors = dds
             .get(2)
-            .context("没有找到作者的<dd>")?
-            .select(&Selector::parse("a").to_anyhow()?)
+            .ok_or_eyre("没有找到作者的<dd>")?
+            .select(&Selector::parse("a").to_eyre()?)
             .filter_map(|a| a.value().attr("title").map(str::to_string))
             .collect::<Vec<_>>();
 
         let aliases = dds
             .get(3)
-            .context("没有找到别名的<dd>")?
-            .select(&Selector::parse("a").to_anyhow()?)
+            .ok_or_eyre("没有找到别名的<dd>")?
+            .select(&Selector::parse("a").to_eyre()?)
             .filter_map(|a| a.text().next().map(|text| text.trim().to_string()))
             .collect::<Vec<_>>();
 
         let intro = book_detail_div
-            .select(&Selector::parse(".intro span").to_anyhow()?)
+            .select(&Selector::parse(".intro span").to_eyre()?)
             .next()
-            .context("没有找到简介的<span>")?
+            .ok_or_eyre("没有找到简介的<span>")?
             .text()
             .nth(1)
-            .context("没有在简介的<span>中找到文本")?
+            .ok_or_eyre("没有在简介的<span>中找到文本")?
             .trim()
             .trim_end_matches('[')
             .to_string();
@@ -184,29 +184,29 @@ impl ComicInSearch {
     }
 }
 
-fn get_id_and_title_and_subtitle(dt: ElementRef) -> anyhow::Result<(i64, String, Option<String>)> {
+fn get_id_and_title_and_subtitle(dt: ElementRef) -> eyre::Result<(i64, String, Option<String>)> {
     let a = dt
-        .select(&Selector::parse("dt > a").to_anyhow()?)
+        .select(&Selector::parse("dt > a").to_eyre()?)
         .next()
-        .context("没有找到标题和链接的<a>")?;
+        .ok_or_eyre("没有找到标题和链接的<a>")?;
 
     let id = a
         .value()
         .attr("href")
-        .context("没有在标题和链接的<a>中找到href属性")?
+        .ok_or_eyre("没有在标题和链接的<a>中找到href属性")?
         .trim_start_matches("/comic/")
         .trim_end_matches('/')
         .parse()
-        .context("漫画id不是整数")?;
+        .wrap_err("漫画id不是整数")?;
 
     let title = a
         .value()
         .attr("title")
-        .context("没有在标题和链接的<a>中找到title属性")?
+        .ok_or_eyre("没有在标题和链接的<a>中找到title属性")?
         .to_string();
 
     let subtitle = dt
-        .select(&Selector::parse("dt > small > a").to_anyhow()?)
+        .select(&Selector::parse("dt > small > a").to_eyre()?)
         .next()
         .and_then(|a| a.text().next())
         .map(|text| text.trim().to_string());
@@ -214,26 +214,26 @@ fn get_id_and_title_and_subtitle(dt: ElementRef) -> anyhow::Result<(i64, String,
     Ok((id, title, subtitle))
 }
 
-fn get_status_and_update_time(status_dd: &ElementRef) -> anyhow::Result<(String, String)> {
+fn get_status_and_update_time(status_dd: &ElementRef) -> eyre::Result<(String, String)> {
     let spans = status_dd
-        .select(&Selector::parse("span > span").to_anyhow()?)
+        .select(&Selector::parse("span > span").to_eyre()?)
         .collect::<Vec<_>>();
 
     let status = spans
         .first()
-        .context("没有找到漫画状态的<span>")?
+        .ok_or_eyre("没有找到漫画状态的<span>")?
         .text()
         .next()
-        .context("没有在漫画状态的<span>中找到文本")?
+        .ok_or_eyre("没有在漫画状态的<span>中找到文本")?
         .trim()
         .to_string();
 
     let update_time = spans
         .get(1)
-        .context("没有找到更新时间的<span>")?
+        .ok_or_eyre("没有找到更新时间的<span>")?
         .text()
         .next()
-        .context("没有在更新时间的<span>中找到文本")?
+        .ok_or_eyre("没有在更新时间的<span>中找到文本")?
         .trim()
         .to_string();
 
@@ -242,41 +242,41 @@ fn get_status_and_update_time(status_dd: &ElementRef) -> anyhow::Result<(String,
 
 fn get_year_and_region_and_genres(
     info_dd: &ElementRef,
-) -> anyhow::Result<(i64, String, Vec<String>)> {
+) -> eyre::Result<(i64, String, Vec<String>)> {
     let spans = info_dd
-        .select(&Selector::parse("span").to_anyhow()?)
+        .select(&Selector::parse("span").to_eyre()?)
         .collect::<Vec<_>>();
 
-    let a_selector = Selector::parse("a").to_anyhow()?;
+    let a_selector = Selector::parse("a").to_eyre()?;
 
     let year = spans
         .first()
-        .context("没有找到出版年份<span>")?
+        .ok_or_eyre("没有找到出版年份<span>")?
         .select(&a_selector)
         .next()
-        .context("没有找到出版年份<a>")?
+        .ok_or_eyre("没有找到出版年份<a>")?
         .text()
         .next()
-        .context("没有在出版年份<a>中找到文本")?
+        .ok_or_eyre("没有在出版年份<a>中找到文本")?
         .trim()
         .trim_end_matches('年')
         .parse()
-        .context("出版年份不是整数")?;
+        .wrap_err("出版年份不是整数")?;
 
     let region = spans
         .get(1)
-        .context("没有找到地区<span>")?
+        .ok_or_eyre("没有找到地区<span>")?
         .select(&a_selector)
         .next()
-        .context("没有找到地区<a>")?
+        .ok_or_eyre("没有找到地区<a>")?
         .value()
         .attr("title")
-        .context("没有在地区<a>中找到title属性")?
+        .ok_or_eyre("没有在地区<a>中找到title属性")?
         .to_string();
 
     let genres = spans
         .get(2)
-        .context("没有找到类型<span>")?
+        .ok_or_eyre("没有找到类型<span>")?
         .select(&a_selector)
         .filter_map(|a| a.value().attr("title").map(str::to_string))
         .collect::<Vec<_>>();

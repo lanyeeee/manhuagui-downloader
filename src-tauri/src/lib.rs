@@ -11,8 +11,8 @@ mod manhuagui_client;
 mod types;
 mod utils;
 
-use anyhow::Context;
 use config::Config;
+use eyre::WrapErr;
 use manhuagui_client::ManhuaguiClient;
 use parking_lot::RwLock;
 use tauri::{Manager, Wry};
@@ -84,14 +84,14 @@ pub fn run() {
             let app_data_dir = app
                 .path()
                 .app_data_dir()
-                .context("获取app_data_dir目录失败")?;
+                .wrap_err("获取app_data_dir目录失败")?;
 
-            std::fs::create_dir_all(&app_data_dir).context(format!(
+            std::fs::create_dir_all(&app_data_dir).wrap_err(format!(
                 "创建app_data_dir目录`{}`失败",
                 app_data_dir.display()
             ))?;
 
-            let config = RwLock::new(Config::new(app.handle())?);
+            let config = RwLock::new(Config::new(app.handle()).wrap_err("创建Config失败")?);
             app.manage(config);
 
             let manhuagui_client = ManhuaguiClient::new(app.handle().clone());
@@ -100,7 +100,7 @@ pub fn run() {
             let download_manager = DownloadManager::new(app.handle());
             app.manage(download_manager);
 
-            logger::init(app.handle())?;
+            logger::init(app.handle()).wrap_err("初始化日志系统失败")?;
 
             Ok(())
         })

@@ -6,8 +6,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use anyhow::Context;
 pub use cbz::cbz;
+use eyre::WrapErr;
 pub use pdf::pdf;
 
 use crate::{extensions::PathIsImg, types::ChapterInfo};
@@ -35,9 +35,9 @@ fn get_downloaded_chapters(groups: HashMap<String, Vec<ChapterInfo>>) -> Vec<Cha
         .collect::<Vec<_>>()
 }
 
-fn get_image_paths(images_dir: &Path) -> Result<Vec<PathBuf>, anyhow::Error> {
+fn get_image_paths(images_dir: &Path) -> eyre::Result<Vec<PathBuf>> {
     let mut image_paths: Vec<PathBuf> = std::fs::read_dir(images_dir)
-        .context(format!("读取目录`{}`失败", images_dir.display()))?
+        .wrap_err(format!("读取目录`{}`失败", images_dir.display()))?
         .filter_map(Result::ok)
         .map(|entry| entry.path())
         .filter(|path| path.is_img())

@@ -1,6 +1,6 @@
 use std::{collections::HashMap, path::PathBuf, time::Duration};
 
-use anyhow::{anyhow, Context};
+use eyre::{eyre, WrapErr};
 use indexmap::IndexMap;
 use tauri::AppHandle;
 use tauri_plugin_opener::OpenerExt;
@@ -13,7 +13,7 @@ use crate::{
     errors::{CommandError, CommandResult},
     events::UpdateDownloadedComicsEvent,
     export,
-    extensions::{AnyhowErrorToStringChain, AppHandleExt, WalkDirEntryExt},
+    extensions::{AppHandleExt, ReportToStringChain, WalkDirEntryExt},
     logger,
     types::{
         ChapterInfo, Comic, ComicInFavorite, ComicInSearch, GetFavoriteResult, SearchResult,
@@ -168,8 +168,8 @@ pub fn get_downloaded_comics(app: AppHandle) -> Vec<Comic> {
 
         let metadata = match path
             .metadata()
-            .map_err(anyhow::Error::from)
-            .context(format!("获取`{}`的metadata失败", path.display()))
+            .map_err(eyre::Report::from)
+            .wrap_err(format!("获取`{}`的metadata失败", path.display()))
         {
             Ok(metadata) => metadata,
             Err(err) => {
@@ -182,8 +182,8 @@ pub fn get_downloaded_comics(app: AppHandle) -> Vec<Comic> {
 
         let modify_time = match metadata
             .modified()
-            .map_err(anyhow::Error::from)
-            .context(format!("获取`{}`的修改时间失败", path.display()))
+            .map_err(eyre::Report::from)
+            .wrap_err(format!("获取`{}`的修改时间失败", path.display()))
         {
             Ok(modify_time) => modify_time,
             Err(err) => {
@@ -201,7 +201,7 @@ pub fn get_downloaded_comics(app: AppHandle) -> Vec<Comic> {
 
     let mut downloaded_comics = Vec::new();
     for (metadata_path, _) in metadata_path_and_modify_time_pairs {
-        match Comic::from_metadata(&metadata_path).context(format!(
+        match Comic::from_metadata(&metadata_path).wrap_err(format!(
             "从元数据`{}`转为Comic失败",
             metadata_path.display()
         )) {
@@ -245,12 +245,12 @@ pub fn get_downloaded_comics(app: AppHandle) -> Vec<Comic> {
             // 如果有重复的漫画，打印错误信息
             let comic_title = &comics[0].title;
             let err_title = "获取已下载漫画的过程中遇到错误";
-            let string_chain = anyhow!("所有版本路径: [{dir_paths_string}]")
-                .context(format!(
+            let string_chain = eyre!("所有版本路径: [{dir_paths_string}]")
+                .wrap_err(format!(
                     "此次获取已下载漫画的结果中只保留版本`{}`",
                     chosen_download_dir.display()
                 ))
-                .context(format!(
+                .wrap_err(format!(
                     "漫画`{comic_title}`在下载目录里有多个版本，请手动处理，只保留一个版本"
                 ))
                 .to_string_chain();
@@ -270,6 +270,7 @@ pub fn get_downloaded_comics(app: AppHandle) -> Vec<Comic> {
 pub fn export_cbz(app: AppHandle, comic: Comic) -> CommandResult<()> {
     let comic_title = comic.title.clone();
     export::cbz(&app, &comic)
+        .wrap_err(format!("漫画`{comic_title}`导出cbz失败"))
         .map_err(|err| CommandError::from(&format!("漫画`{comic_title}`导出cbz失败"), err))?;
     tracing::debug!("漫画`{comic_title}`导出cbz成功");
     Ok(())
@@ -281,6 +282,7 @@ pub fn export_cbz(app: AppHandle, comic: Comic) -> CommandResult<()> {
 pub fn export_pdf(app: AppHandle, comic: Comic) -> CommandResult<()> {
     let comic_title = comic.title.clone();
     export::pdf(&app, &comic)
+        .wrap_err(format!("漫画`{comic_title}`导出pdf失败"))
         .map_err(|err| CommandError::from(&format!("漫画`{comic_title}`导出pdf失败"), err))?;
     tracing::debug!("漫画`{comic_title}`导出pdf成功");
     Ok(())
@@ -311,7 +313,9 @@ pub async fn update_downloaded_comics(app: AppHandle) -> CommandResult<()> {
             Ok(comic) => comic,
             Err(err) => {
                 let err_title = format!("更新库存过程中，获取漫画`{comic_title}`失败，已跳过");
-                let err = err.context("可能是频率太高，请手动去`配置`里调整`更新库存时，每处理完一个已下载的漫画后休息`");
+                let err = err.wrap_err(
+                    "可能是频率太高，请手动去`配置`里调整`更新库存时，每处理完一个已下载的漫画后休息`",
+                );
                 let string_chain = err.to_string_chain();
                 tracing::error!(err_title, message = string_chain);
                 sleep(Duration::from_secs(interval_sec)).await;
@@ -396,10 +400,10 @@ pub async fn update_downloaded_comics(app: AppHandle) -> CommandResult<()> {
 #[specta::specta]
 pub fn get_logs_dir_size(app: AppHandle) -> CommandResult<u64> {
     let logs_dir = logger::logs_dir(&app)
-        .context("获取日志目录失败")
+        .wrap_err("获取日志目录失败")
         .map_err(|err| CommandError::from("获取日志目录大小失败", err))?;
     let logs_dir_size = std::fs::read_dir(&logs_dir)
-        .context(format!("读取日志目录`{}`失败", logs_dir.display()))
+        .wrap_err(format!("读取日志目录`{}`失败", logs_dir.display()))
         .map_err(|err| CommandError::from("获取日志目录大小失败", err))?
         .filter_map(Result::ok)
         .filter_map(|entry| entry.metadata().ok())
@@ -415,7 +419,7 @@ pub fn get_logs_dir_size(app: AppHandle) -> CommandResult<u64> {
 pub fn show_path_in_file_manager(app: AppHandle, path: &str) -> CommandResult<()> {
     app.opener()
         .reveal_item_in_dir(path)
-        .context(format!("在文件管理器中打开`{path}`失败"))
+        .wrap_err(format!("在文件管理器中打开`{path}`失败"))
         .map_err(|err| CommandError::from("在文件管理器中打开失败", err))?;
     tracing::debug!("在文件管理器中打开成功");
     Ok(())
@@ -488,7 +492,7 @@ pub fn get_synced_comic(app: AppHandle, mut comic: Comic) -> CommandResult<Comic
     let comic_title = comic.title.clone();
 
     let id_to_dir_map = utils::create_id_to_dir_map(&app)
-        .context("创建漫画ID到下载目录映射失败")
+        .wrap_err("创建漫画ID到下载目录映射失败")
         .map_err(|err| {
             CommandError::from(&format!("漫画`{comic_title}`同步Comic的字段失败"), err)
         })?;
@@ -510,7 +514,7 @@ pub fn get_synced_comic_in_favorite(
     let comic_title = comic.title.clone();
 
     let id_to_dir_map = utils::create_id_to_dir_map(&app)
-        .context("创建漫画ID到下载目录映射失败")
+        .wrap_err("创建漫画ID到下载目录映射失败")
         .map_err(|err| {
             CommandError::from(
                 &format!("漫画`{comic_title}`同步ComicInFavorite的字段失败"),
@@ -533,7 +537,7 @@ pub fn get_synced_comic_in_search(
     let comic_title = comic.title.clone();
 
     let id_to_dir_map = utils::create_id_to_dir_map(&app)
-        .context("创建漫画ID到下载目录映射失败")
+        .wrap_err("创建漫画ID到下载目录映射失败")
         .map_err(|err| {
             CommandError::from(
                 &format!("漫画`{comic_title}`同步ComicInSearch的字段失败"),

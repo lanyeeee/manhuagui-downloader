@@ -1,7 +1,7 @@
 use std::{sync::Arc, time::Duration};
 
-use anyhow::{anyhow, Context};
 use bytes::Bytes;
+use eyre::{eyre, OptionExt, WrapErr};
 use parking_lot::RwLock;
 use reqwest::StatusCode;
 use reqwest_middleware::ClientWithMiddleware;
@@ -12,7 +12,7 @@ use tauri::AppHandle;
 use crate::{
     config::ProxyMode,
     decrypt::decrypt,
-    extensions::{AnyhowErrorToStringChain, AppHandleExt, SendWithTimeoutMsg},
+    extensions::{AppHandleExt, ReportToStringChain, SendWithTimeoutMsg},
     types::{ChapterInfo, Comic, GetFavoriteResult, SearchResult, UserProfile},
 };
 
@@ -45,7 +45,7 @@ impl ManhuaguiClient {
         *self.img_client.write() = img_client;
     }
 
-    pub async fn login(&self, username: &str, password: &str) -> anyhow::Result<String> {
+    pub async fn login(&self, username: &str, password: &str) -> eyre::Result<String> {
         let params = json!({"action": "user_login"});
         let form = json!({
             "txtUserName": username,
@@ -64,22 +64,22 @@ impl ManhuaguiClient {
         let headers = http_resp.headers().clone();
         let body = http_resp.text().await?;
         if status == StatusCode::FOUND {
-            return Err(anyhow!("cookie已过期或无效"));
+            return Err(eyre!("cookie已过期或无效"));
         } else if status != StatusCode::OK {
-            return Err(anyhow!("预料之外的状态码({status}): {body}"));
+            return Err(eyre!("预料之外的状态码({status}): {body}"));
         }
         // 获取resp header中的set-cookie字段
         let cookie = headers
             .get("set-cookie")
-            .ok_or(anyhow!("响应中没有set-cookie字段: {body}"))?
+            .ok_or_eyre(format!("响应中没有set-cookie字段: {body}"))?
             .to_str()
-            .context(format!("响应中的set-cookie字段不是utf-8字符串: {body}"))?
+            .wrap_err(format!("响应中的set-cookie字段不是utf-8字符串: {body}"))?
             .to_string();
 
         Ok(cookie)
     }
 
-    pub async fn get_user_profile(&self) -> anyhow::Result<UserProfile> {
+    pub async fn get_user_profile(&self) -> eyre::Result<UserProfile> {
         let cookie = self.app.get_config().read().cookie.clone();
         // 发送获取用户信息请求
         let request = self
@@ -92,30 +92,30 @@ impl ManhuaguiClient {
         let status = http_resp.status();
         let body = http_resp.text().await?;
         if status == StatusCode::FOUND {
-            return Err(anyhow!("未登录、cookie已过期或cookie无效"));
+            return Err(eyre!("未登录、cookie已过期或cookie无效"));
         } else if status != StatusCode::OK {
-            return Err(anyhow!("预料之外的状态码({status}): {body}"));
+            return Err(eyre!("预料之外的状态码({status}): {body}"));
         }
 
-        let user_profile = UserProfile::from_html(&body).context("将body转换为UserProfile失败")?;
+        let user_profile = UserProfile::from_html(&body).wrap_err("将body转换为UserProfile失败")?;
         Ok(user_profile)
     }
 
-    pub async fn search(&self, keyword: &str, page_num: i64) -> anyhow::Result<SearchResult> {
+    pub async fn search(&self, keyword: &str, page_num: i64) -> eyre::Result<SearchResult> {
         let url = format!("https://www.manhuagui.com/s/{keyword}_p{page_num}.html");
         let request = self.api_client.read().get(url);
         let http_resp = request.send_with_timeout_msg().await?;
         let status = http_resp.status();
         let body = http_resp.text().await?;
         if status != StatusCode::OK {
-            return Err(anyhow!("预料之外的状态码({status}): {body}"));
+            return Err(eyre!("预料之外的状态码({status}): {body}"));
         }
         let search_result =
-            SearchResult::from_html(&self.app, &body).context("将body转换为SearchResult失败")?;
+            SearchResult::from_html(&self.app, &body).wrap_err("将body转换为SearchResult失败")?;
         Ok(search_result)
     }
 
-    pub async fn get_comic(&self, id: i64) -> anyhow::Result<Comic> {
+    pub async fn get_comic(&self, id: i64) -> eyre::Result<Comic> {
         let request = self
             .api_client
             .read()
@@ -124,14 +124,14 @@ impl ManhuaguiClient {
         let status = http_resp.status();
         let body = http_resp.text().await?;
         if status != StatusCode::OK {
-            return Err(anyhow!("预料之外的状态码({status}): {body}"));
+            return Err(eyre!("预料之外的状态码({status}): {body}"));
         }
-        let comic = Comic::from_html(&self.app, &body).context("将body转换为Comic失败")?;
+        let comic = Comic::from_html(&self.app, &body).wrap_err("将body转换为Comic失败")?;
 
         Ok(comic)
     }
 
-    pub async fn get_img_urls(&self, chapter_info: &ChapterInfo) -> anyhow::Result<Vec<String>> {
+    pub async fn get_img_urls(&self, chapter_info: &ChapterInfo) -> eyre::Result<Vec<String>> {
         let comic_id = chapter_info.comic_id;
         let chapter_id = chapter_info.chapter_id;
 
@@ -141,10 +141,10 @@ impl ManhuaguiClient {
         let status = http_resp.status();
         let body = http_resp.text().await?;
         if status != StatusCode::OK {
-            return Err(anyhow!("预料之外的状态码({status}): {body}"));
+            return Err(eyre!("预料之外的状态码({status}): {body}"));
         }
 
-        let decrypt_result = decrypt(&body).context("解密失败")?;
+        let decrypt_result = decrypt(&body).wrap_err("解密失败")?;
 
         let urls = decrypt_result
             .files
@@ -156,7 +156,7 @@ impl ManhuaguiClient {
         Ok(urls)
     }
 
-    pub async fn get_img_bytes(&self, url: &str) -> anyhow::Result<Bytes> {
+    pub async fn get_img_bytes(&self, url: &str) -> eyre::Result<Bytes> {
         // 发送下载图片请求
         let request = self
             .img_client
@@ -168,7 +168,7 @@ impl ManhuaguiClient {
         let status = http_resp.status();
         if status != StatusCode::OK {
             let body = http_resp.text().await?;
-            return Err(anyhow!("预料之外的状态码({status}): {body}"));
+            return Err(eyre!("预料之外的状态码({status}): {body}"));
         }
         // 读取图片数据
         let image_data = http_resp.bytes().await?;
@@ -176,7 +176,7 @@ impl ManhuaguiClient {
         Ok(image_data)
     }
 
-    pub async fn get_favorite(&self, page_num: i64) -> anyhow::Result<GetFavoriteResult> {
+    pub async fn get_favorite(&self, page_num: i64) -> eyre::Result<GetFavoriteResult> {
         let cookie = self.app.get_config().read().cookie.clone();
         // 发送获取收藏夹请求
         let url = format!("https://www.manhuagui.com/user/book/shelf/{page_num}");
@@ -186,11 +186,11 @@ impl ManhuaguiClient {
         let status = http_resp.status();
         let body = http_resp.text().await?;
         if status != StatusCode::OK {
-            return Err(anyhow!("预料之外的状态码({status}): {body}"));
+            return Err(eyre!("预料之外的状态码({status}): {body}"));
         }
         // 解析html
         let get_favorite_result = GetFavoriteResult::from_html(&self.app, &body)
-            .context("将body转换为GetFavoriteResult失败")?;
+            .wrap_err("将body转换为GetFavoriteResult失败")?;
         Ok(get_favorite_result)
     }
 }
@@ -242,7 +242,7 @@ impl ClientBuilderExt for reqwest::ClientBuilder {
                 let proxy_port = &config.proxy_port;
                 let proxy_url = format!("http://{proxy_host}:{proxy_port}");
 
-                match reqwest::Proxy::all(&proxy_url).map_err(anyhow::Error::from) {
+                match reqwest::Proxy::all(&proxy_url).map_err(eyre::Report::from) {
                     Ok(proxy) => self.proxy(proxy),
                     Err(err) => {
                         let err_title = format!("{client_name}将`{proxy_url}`设为代理失败，将直连");
