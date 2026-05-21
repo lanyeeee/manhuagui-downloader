@@ -9,6 +9,7 @@ use tracing_appender::{
     non_blocking::WorkerGuard,
     rolling::{RollingFileAppender, Rotation},
 };
+use tracing_error::ErrorLayer;
 use tracing_subscriber::{
     filter::{filter_fn, FilterExt, Targets},
     fmt::{layer, time::LocalTime},
@@ -20,7 +21,7 @@ use tracing_subscriber::{
 
 use crate::{
     events::LogEvent,
-    extensions::{AppHandleExt, ReportToStringChain},
+    extensions::{AppHandleExt, EyreReportToMessage},
 };
 
 struct LogEventWriter {
@@ -85,6 +86,7 @@ pub fn init(app: &AppHandle) -> eyre::Result<()> {
         .with(reloadable_file_layer)
         .with(console_layer)
         .with(log_event_layer)
+        .with(ErrorLayer::default())
         .init();
 
     GUARD.get_or_init(|| parking_lot::Mutex::new(guard));
@@ -154,8 +156,8 @@ async fn file_log_watcher(app: AppHandle) {
         tauri::async_runtime::block_on(async {
             if let Err(err) = sender.send(res).await.map_err(eyre::Report::from) {
                 let err_title = "发送日志文件watcher事件失败";
-                let string_chain = err.to_string_chain();
-                tracing::error!(err_title, message = string_chain);
+                let message = err.to_message();
+                tracing::error!(err_title, message);
             }
         });
     };
@@ -166,8 +168,8 @@ async fn file_log_watcher(app: AppHandle) {
         Ok(watcher) => watcher,
         Err(err) => {
             let err_title = "创建日志文件watcher失败";
-            let string_chain = err.to_string_chain();
-            tracing::error!(err_title, message = string_chain);
+            let message = err.to_message();
+            tracing::error!(err_title, message);
             return;
         }
     };
@@ -176,19 +178,26 @@ async fn file_log_watcher(app: AppHandle) {
         Ok(logs_dir) => logs_dir,
         Err(err) => {
             let err_title = "日志文件watcher获取日志目录失败";
-            let string_chain = err.to_string_chain();
-            tracing::error!(err_title, message = string_chain);
+            let message = err.to_message();
+            tracing::error!(err_title, message);
             return;
         }
     };
+
+    if let Err(err) = std::fs::create_dir_all(&logs_dir) {
+        let err_title = "创建日志目录失败";
+        let message = eyre::Report::from(err).to_message();
+        tracing::error!(err_title, message);
+        return;
+    }
 
     if let Err(err) = watcher
         .watch(&logs_dir, notify::RecursiveMode::NonRecursive)
         .map_err(eyre::Report::from)
     {
         let err_title = "日志文件watcher监听日志目录失败";
-        let string_chain = err.to_string_chain();
-        tracing::error!(err_title, message = string_chain);
+        let message = err.to_message();
+        tracing::error!(err_title, message);
         return;
     }
 
@@ -198,15 +207,15 @@ async fn file_log_watcher(app: AppHandle) {
                 if let notify::EventKind::Remove(_) = event.kind {
                     if let Err(err) = reload_file_logger() {
                         let err_title = "重置日志文件失败";
-                        let string_chain = err.to_string_chain();
-                        tracing::error!(err_title, message = string_chain);
+                        let message = err.to_message();
+                        tracing::error!(err_title, message);
                     }
                 }
             }
             Err(err) => {
                 let err_title = "接收日志文件watcher事件失败";
-                let string_chain = err.to_string_chain();
-                tracing::error!(err_title, message = string_chain);
+                let message = err.to_message();
+                tracing::error!(err_title, message);
             }
         }
     }

@@ -12,7 +12,7 @@ use tokio::{
 
 use crate::{
     downloader::{download_task::DownloadTask, download_task_state::DownloadTaskState},
-    extensions::{AppHandleExt, ReportToStringChain},
+    extensions::{AppHandleExt, EyreReportToMessage},
     manhuagui_client::ManhuaguiClient,
 };
 
@@ -111,8 +111,8 @@ impl DownloadImgTask {
             Ok(data) => data,
             Err(err) => {
                 let err_title = format!("下载图片`{url}`失败");
-                let string_chain = err.to_string_chain();
-                tracing::error!(err_title, message = string_chain);
+                let message = err.to_message();
+                tracing::error!(err_title, message);
                 return;
             }
         };
@@ -128,8 +128,8 @@ impl DownloadImgTask {
 
         if let Err(err) = std::fs::write(&save_path, &img_data).map_err(eyre::Report::from) {
             let err_title = format!("保存图片`{}`失败", save_path.display());
-            let string_chain = err.to_string_chain();
-            tracing::error!(err_title, message = string_chain);
+            let message = err.to_message();
+            tracing::error!(err_title, message);
             return;
         }
 
@@ -182,8 +182,8 @@ impl DownloadImgTask {
                     let err_title = format!(
                         "`{comic_title} - {group_name} - {chapter_title}`获取下载图片的permit失败"
                     );
-                    let string_chain = err.to_string_chain();
-                    tracing::error!(err_title, message = string_chain);
+                    let message = err.to_message();
+                    tracing::error!(err_title, message);
                     return;
                 }
             },

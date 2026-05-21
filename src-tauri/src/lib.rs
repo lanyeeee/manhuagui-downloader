@@ -20,6 +20,7 @@ use tauri::{Manager, Wry};
 use crate::{
     commands::*,
     downloader::download_manager::DownloadManager,
+    errors::install_custom_eyre_handler,
     events::{
         DownloadEvent, ExportCbzEvent, ExportPdfEvent, LogEvent, UpdateDownloadedComicsEvent,
     },
@@ -31,6 +32,8 @@ fn generate_context() -> tauri::Context<Wry> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    install_custom_eyre_handler().unwrap();
+
     let builder = tauri_specta::Builder::<Wry>::new()
         .commands(tauri_specta::collect_commands![
             greet,

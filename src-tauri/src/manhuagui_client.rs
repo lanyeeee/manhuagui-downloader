@@ -12,7 +12,7 @@ use tauri::AppHandle;
 use crate::{
     config::ProxyMode,
     decrypt::decrypt,
-    extensions::{AppHandleExt, ReportToStringChain, SendWithTimeoutMsg},
+    extensions::{AppHandleExt, EyreReportToMessage, SendWithTimeoutMsg},
     types::{ChapterInfo, Comic, GetFavoriteResult, SearchResult, UserProfile},
 };
 
@@ -246,8 +246,8 @@ impl ClientBuilderExt for reqwest::ClientBuilder {
                     Ok(proxy) => self.proxy(proxy),
                     Err(err) => {
                         let err_title = format!("{client_name}将`{proxy_url}`设为代理失败，将直连");
-                        let string_chain = err.to_string_chain();
-                        tracing::error!(err_title, message = string_chain);
+                        let message = err.to_message();
+                        tracing::error!(err_title, message);
                         self.no_proxy()
                     }
                 }
