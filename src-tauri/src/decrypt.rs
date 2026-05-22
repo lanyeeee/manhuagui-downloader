@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use eyre::{OptionExt, WrapErr};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
+use tracing::instrument;
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -48,6 +49,7 @@ pub struct Sl {
     m: String,
 }
 
+#[instrument(level = "error", skip_all)]
 pub fn decrypt(html: &str) -> eyre::Result<DecryptResult> {
     let (function, a, c, data) = extract_decryption_data(html)?;
 
@@ -60,6 +62,7 @@ pub fn decrypt(html: &str) -> eyre::Result<DecryptResult> {
     Ok(decrypt_result)
 }
 
+#[instrument(level = "error", skip_all)]
 fn extract_decryption_data(html: &str) -> eyre::Result<(String, i32, i32, Vec<String>)> {
     let re =
         Regex::new(r"^.*}\('(.*)',(\d*),(\d*),'([\w|+/=]*)'.*$").wrap_err("正则表达式编译失败")?;
@@ -153,6 +156,7 @@ fn create_dict(a: i32, mut c: i32, data: &[String]) -> HashMap<String, String> {
     dict
 }
 
+#[instrument(level = "error", skip_all)]
 fn create_js(function: &str, dict: &HashMap<String, String>) -> eyre::Result<String> {
     let re = Regex::new(r"(\b\w+\b)").wrap_err("正则表达式编译失败")?;
 
@@ -183,6 +187,7 @@ fn create_js(function: &str, dict: &HashMap<String, String>) -> eyre::Result<Str
     Ok(js)
 }
 
+#[instrument(level = "error", skip_all)]
 fn create_decrypt_result(js: &str) -> eyre::Result<DecryptResult> {
     let re = Regex::new(r"^.*\((\{.*})\).*$").wrap_err("正则表达式编译失败")?;
 

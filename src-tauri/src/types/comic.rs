@@ -8,6 +8,7 @@ use scraper::{ElementRef, Html, Selector};
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use tauri::AppHandle;
+use tracing::instrument;
 use walkdir::WalkDir;
 
 use crate::{
@@ -55,6 +56,7 @@ pub struct Comic {
 
 impl Comic {
     #[allow(clippy::too_many_lines)]
+    #[instrument(level = "error", skip_all)]
     pub fn from_html(app: &AppHandle, html: &str) -> eyre::Result<Comic> {
         let document = Html::parse_document(html);
 
@@ -173,8 +175,7 @@ impl Comic {
             comic_download_dir: None,
         };
 
-        let id_to_dir_map =
-            utils::create_id_to_dir_map(app).wrap_err("创建漫画路径词到下载目录映射失败")?;
+        let id_to_dir_map = utils::create_id_to_dir_map(app)?;
 
         // TODO: 这是为了兼容v0.4.2及之前的版本，后续需要移除，计划在v0.6.0之后移除
         if let Some(comic_download_dir) = id_to_dir_map.get(&comic.id) {
@@ -183,22 +184,16 @@ impl Comic {
                 .wrap_err("为旧版本创建章节元数据失败")?;
         }
 
-        comic
-            .update_fields(&id_to_dir_map)
-            .wrap_err(format!("`{}`更新Comic的字段失败", comic.title))?;
+        comic.update_fields(&id_to_dir_map)?;
 
         Ok(comic)
     }
 
+    #[instrument(level = "error", skip_all, fields(metadata_path = %metadata_path.display()))]
     pub fn from_metadata(metadata_path: &Path) -> eyre::Result<Comic> {
-        let comic_json = std::fs::read_to_string(metadata_path).wrap_err(format!(
-            "从元数据转为Comic失败，读取元数据文件`{}`失败",
-            metadata_path.display()
-        ))?;
-        let mut comic = serde_json::from_str::<Comic>(&comic_json).wrap_err(format!(
-            "从元数据转为Comic失败，将`{}`反序列化为Comic失败",
-            metadata_path.display()
-        ))?;
+        let comic_json = std::fs::read_to_string(metadata_path)?;
+        let mut comic = serde_json::from_str::<Comic>(&comic_json)
+            .wrap_err("将元数据文件反序列化为Comic失败")?;
         let parent = metadata_path
             .parent()
             .ok_or_eyre(format!("`{}`没有父目录", metadata_path.display()))?;
@@ -213,25 +208,32 @@ impl Comic {
         comic.is_downloaded = Some(true);
 
         // 来自元数据的章节信息没有`chapter_download_dir`和`is_downloaded`字段，需要更新
-        comic
-            .update_chapter_infos_fields()
-            .wrap_err("更新章节信息字段失败")?;
+        comic.update_chapter_infos_fields()?;
 
         Ok(comic)
     }
 
+    #[instrument(
+        level = "error",
+        skip_all,
+        fields(comic_id = self.id, comic_title = self.title)
+    )]
     pub fn update_fields(&mut self, id_to_dir_map: &HashMap<i64, PathBuf>) -> eyre::Result<()> {
         if let Some(comic_download_dir) = id_to_dir_map.get(&self.id) {
             self.comic_download_dir = Some(comic_download_dir.clone());
             self.is_downloaded = Some(true);
 
-            self.update_chapter_infos_fields()
-                .wrap_err("更新章节信息字段失败")?;
+            self.update_chapter_infos_fields()?;
         }
 
         Ok(())
     }
 
+    #[instrument(
+        level = "error",
+        skip_all,
+        fields(comic_id = self.id, comic_title = self.title)
+    )]
     fn update_chapter_infos_fields(&mut self) -> eyre::Result<()> {
         let Some(comic_download_dir) = &self.comic_download_dir else {
             return Err(eyre!("`comic_download_dir`字段为`None`"));
@@ -290,6 +292,11 @@ impl Comic {
         Ok(())
     }
 
+    #[instrument(
+        level = "error",
+        skip_all,
+        fields(comic_id = self.id, comic_title = self.title)
+    )]
     pub fn save_metadata(&self) -> eyre::Result<()> {
         let mut comic = self.clone();
         // 将所有的is_downloaded字段设置为None，这样能使is_downloaded字段在序列化时被忽略
@@ -318,6 +325,11 @@ impl Comic {
         Ok(())
     }
 
+    #[instrument(
+        level = "error",
+        skip_all,
+        fields(comic_id = self.id, comic_title = self.title)
+    )]
     pub fn get_comic_export_dir(&self, app: &AppHandle) -> eyre::Result<PathBuf> {
         let (download_dir, export_dir) = {
             let config = app.get_config();
@@ -341,6 +353,11 @@ impl Comic {
         Ok(comic_export_dir)
     }
 
+    #[instrument(
+        level = "error",
+        skip_all,
+        fields(comic_id = self.id, comic_title = self.title)
+    )]
     pub fn ensure_download_dir_fields(&mut self, app: &AppHandle) -> eyre::Result<()> {
         if self.has_download_dir_fields() {
             return Ok(());
@@ -361,6 +378,11 @@ impl Comic {
     }
 
     /// 根据fmt更新`comic_download_dir`和`chapter_infos.chapter_download_dir`字段
+    #[instrument(
+        level = "error",
+        skip_all,
+        fields(comic_id = self.id, comic_title = self.title)
+    )]
     pub fn update_download_dir_fields_by_fmt(&mut self, app: &AppHandle) -> eyre::Result<()> {
         let comic_id = self.id;
         let comic_title = self.title.clone();
@@ -402,6 +424,15 @@ impl Comic {
         Ok(())
     }
 
+    #[instrument(
+        level = "error",
+        skip_all,
+        fields(
+            comic_id = fmt_params.comic_id,
+            comic_title = fmt_params.comic_title,
+            author = fmt_params.author
+        )
+    )]
     pub fn get_comic_download_dir_by_fmt(
         app: &AppHandle,
         fmt_params: &ComicDirFmtParams,
@@ -452,6 +483,11 @@ impl Comic {
         Ok(comic_download_dir)
     }
 
+    #[instrument(
+        level = "error",
+        skip_all,
+        fields(comic_id = self.id, comic_title = self.title)
+    )]
     fn create_chapter_metadata_for_old_version(
         &self,
         comic_download_dir: &Path,
@@ -512,6 +548,7 @@ pub struct ComicDirFmtParams {
     pub author: String,
 }
 
+#[instrument(level = "error", skip_all)]
 fn get_title_and_subtitle(book_detail_div: &ElementRef) -> eyre::Result<(String, Option<String>)> {
     let title = book_detail_div
         .select(&Selector::parse(".book-title h1").to_eyre()?)
@@ -533,6 +570,7 @@ fn get_title_and_subtitle(book_detail_div: &ElementRef) -> eyre::Result<(String,
     Ok((title, subtitle))
 }
 
+#[instrument(level = "error", skip_all)]
 fn get_year_and_region(li: &ElementRef) -> eyre::Result<(i64, String)> {
     let spans = li
         .select(&Selector::parse("span").to_eyre()?)
@@ -567,6 +605,7 @@ fn get_year_and_region(li: &ElementRef) -> eyre::Result<(i64, String)> {
     Ok((year, region))
 }
 
+#[instrument(level = "error", skip_all)]
 fn get_genres_and_authors(li: &ElementRef) -> eyre::Result<(Vec<String>, Vec<String>)> {
     let spans = li
         .select(&Selector::parse("span").to_eyre()?)
@@ -590,6 +629,7 @@ fn get_genres_and_authors(li: &ElementRef) -> eyre::Result<(Vec<String>, Vec<Str
     Ok((genres, authors))
 }
 
+#[instrument(level = "error", skip_all)]
 fn get_status_and_update_time(li: &ElementRef) -> eyre::Result<(String, String)> {
     let spans = li
         .select(&Selector::parse("span > span").to_eyre()?)
@@ -617,6 +657,11 @@ fn get_status_and_update_time(li: &ElementRef) -> eyre::Result<(String, String)>
 }
 
 #[allow(clippy::cast_possible_wrap)]
+#[instrument(
+    level = "error",
+    skip_all,
+    fields(comic_id = comic_id, comic_title = comic_title, comic_status = comic_status)
+)]
 fn get_groups(
     chapter_div: &ElementRef,
     comic_id: i64,

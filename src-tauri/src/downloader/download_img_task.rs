@@ -9,6 +9,7 @@ use tokio::{
     sync::{watch, SemaphorePermit},
     time::sleep,
 };
+use tracing::instrument;
 
 use crate::{
     downloader::{download_task::DownloadTask, download_task_state::DownloadTaskState},
@@ -40,6 +41,19 @@ impl DownloadImgTask {
         }
     }
 
+    #[instrument(
+        level = "error",
+        skip_all,
+        fields(
+            index = self.index,
+            url = self.url,
+            comic_id = self.download_task.chapter_info.comic_id,
+            comic_title = self.download_task.chapter_info.comic_title,
+            group_name = self.download_task.chapter_info.group_name,
+            chapter_id = self.download_task.chapter_info.chapter_id,
+            order = self.download_task.chapter_info.order
+        )
+    )]
     pub async fn process(self) {
         let download_img_task = self.download_img();
         tokio::pin!(download_img_task);
@@ -70,12 +84,9 @@ impl DownloadImgTask {
         }
     }
 
+    #[instrument(level = "error", skip_all)]
     async fn download_img(&self) {
         let url = &self.url;
-        let chapter_id = self.download_task.chapter_info.chapter_id;
-        let comic_title = &self.download_task.chapter_info.comic_title;
-        let group_name = &self.download_task.chapter_info.group_name;
-        let chapter_title = &self.download_task.chapter_info.chapter_title;
 
         let save_path = self
             .temp_download_dir
@@ -87,53 +98,32 @@ impl DownloadImgTask {
 
             self.download_task.emit_download_task_update_event();
 
-            tracing::trace!(
-                chapter_id,
-                comic_title,
-                group_name,
-                chapter_title,
-                url,
-                "图片已存在，跳过下载"
-            );
+            tracing::trace!("图片已存在，跳过下载");
             return;
         }
 
-        tracing::trace!(
-            chapter_id,
-            comic_title,
-            group_name,
-            chapter_title,
-            url,
-            "开始下载图片"
-        );
+        tracing::trace!("开始下载图片");
 
         let img_data = match self.manhuagui_client().get_img_bytes(url).await {
             Ok(data) => data,
             Err(err) => {
-                let err_title = format!("下载图片`{url}`失败");
+                let err_title = "下载图片失败";
                 let message = err.to_message();
                 tracing::error!(err_title, message);
                 return;
             }
         };
 
-        tracing::trace!(
-            chapter_id,
-            comic_title,
-            group_name,
-            chapter_title,
-            url,
-            "图片成功下载到内存"
-        );
+        tracing::trace!("图片成功下载到内存");
 
         if let Err(err) = std::fs::write(&save_path, &img_data).map_err(eyre::Report::from) {
-            let err_title = format!("保存图片`{}`失败", save_path.display());
+            let err_title = "保存图片失败";
             let message = err.to_message();
             tracing::error!(err_title, message);
             return;
         }
 
-        tracing::trace!(chapter_id, url, "图片成功保存到`{}`", save_path.display());
+        tracing::trace!("图片成功保存到磁盘");
 
         self.app
             .get_download_manager()
@@ -150,21 +140,9 @@ impl DownloadImgTask {
         sleep(Duration::from_secs(img_download_interval_sec)).await;
     }
 
+    #[instrument(level = "error", skip_all)]
     async fn acquire_img_permit<'a>(&'a self, permit: &mut Option<SemaphorePermit<'a>>) {
-        let url = &self.url;
-        let chapter_id = self.download_task.chapter_info.chapter_id;
-        let comic_title = &self.download_task.chapter_info.comic_title;
-        let group_name = &self.download_task.chapter_info.group_name;
-        let chapter_title = &self.download_task.chapter_info.chapter_title;
-
-        tracing::trace!(
-            chapter_id,
-            comic_title,
-            group_name,
-            chapter_title,
-            url,
-            "图片开始排队"
-        );
+        tracing::trace!("图片开始排队");
 
         *permit = match permit.take() {
             Some(permit) => Some(permit),
@@ -179,9 +157,7 @@ impl DownloadImgTask {
             {
                 Ok(permit) => Some(permit),
                 Err(err) => {
-                    let err_title = format!(
-                        "`{comic_title} - {group_name} - {chapter_title}`获取下载图片的permit失败"
-                    );
+                    let err_title = "获取下载图片的permit失败";
                     let message = err.to_message();
                     tracing::error!(err_title, message);
                     return;
@@ -190,66 +166,35 @@ impl DownloadImgTask {
         };
     }
 
+    #[instrument(level = "error", skip_all)]
     async fn handle_state_change<'a>(
         &'a self,
         permit: &mut Option<SemaphorePermit<'a>>,
         state_receiver: &mut watch::Receiver<DownloadTaskState>,
     ) {
-        let url = &self.url;
-        let chapter_id = self.download_task.chapter_info.chapter_id;
-        let comic_title = &self.download_task.chapter_info.comic_title;
-        let group_name = &self.download_task.chapter_info.group_name;
-        let chapter_title = &self.download_task.chapter_info.chapter_title;
-
         let state = *state_receiver.borrow();
         if state == DownloadTaskState::Paused {
             sleep(Duration::from_millis(100)).await;
-            tracing::trace!(
-                chapter_id,
-                comic_title,
-                group_name,
-                chapter_title,
-                url,
-                "图片暂停下载"
-            );
+            tracing::trace!("图片暂停下载");
             if let Some(permit) = permit.take() {
                 drop(permit);
             }
         } else if state == DownloadTaskState::Failed {
             sleep(Duration::from_millis(100)).await;
-            tracing::trace!(
-                chapter_id,
-                comic_title,
-                group_name,
-                chapter_title,
-                url,
-                "图片下载失败"
-            );
+            tracing::trace!("图片下载失败");
             if let Some(permit) = permit.take() {
                 drop(permit);
             }
         }
     }
 
+    #[instrument(level = "error", skip_all)]
     async fn handle_delete_receiver_change<'a>(&'a self, permit: &mut Option<SemaphorePermit<'a>>) {
-        let url = &self.url;
-        let chapter_id = self.download_task.chapter_info.chapter_id;
-        let comic_title = &self.download_task.chapter_info.comic_title;
-        let group_name = &self.download_task.chapter_info.group_name;
-        let chapter_title = &self.download_task.chapter_info.chapter_title;
-
         if permit.is_some() {
             sleep(Duration::from_millis(100)).await;
         }
 
-        tracing::trace!(
-            chapter_id,
-            comic_title,
-            group_name,
-            chapter_title,
-            url,
-            "图片下载任务已删除"
-        );
+        tracing::trace!("图片下载任务已删除");
     }
 
     fn manhuagui_client(&self) -> ManhuaguiClient {

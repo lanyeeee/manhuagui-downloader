@@ -9,6 +9,7 @@ use std::{
 pub use cbz::cbz;
 use eyre::WrapErr;
 pub use pdf::pdf;
+use tracing::instrument;
 
 use crate::{extensions::PathIsImg, types::ChapterInfo};
 
@@ -35,6 +36,7 @@ fn get_downloaded_chapters(groups: HashMap<String, Vec<ChapterInfo>>) -> Vec<Cha
         .collect::<Vec<_>>()
 }
 
+#[instrument(level = "error", skip_all, fields(images_dir = %images_dir.display()))]
 fn get_image_paths(images_dir: &Path) -> eyre::Result<Vec<PathBuf>> {
     let mut image_paths: Vec<PathBuf> = std::fs::read_dir(images_dir)
         .wrap_err(format!("读取目录`{}`失败", images_dir.display()))?

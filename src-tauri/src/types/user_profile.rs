@@ -3,6 +3,7 @@ use eyre::OptionExt;
 use scraper::{Html, Selector};
 use serde::{Deserialize, Serialize};
 use specta::Type;
+use tracing::instrument;
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
@@ -11,6 +12,7 @@ pub struct UserProfile {
     pub avatar: String,
 }
 impl UserProfile {
+    #[instrument(level = "error", skip_all)]
     pub fn from_html(html: &str) -> eyre::Result<UserProfile> {
         let document = Html::parse_document(html);
         // 获取 `.avatar-box` 的 `<div>`

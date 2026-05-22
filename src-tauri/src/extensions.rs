@@ -4,6 +4,7 @@ use reqwest::Response;
 use reqwest_middleware::RequestBuilder;
 use scraper::error::SelectorErrorKind;
 use tauri::{Manager, State};
+use tracing::instrument;
 
 use crate::{
     config::Config, downloader::download_manager::DownloadManager,
@@ -39,6 +40,7 @@ pub trait SendWithTimeoutMsg {
 }
 
 impl SendWithTimeoutMsg for RequestBuilder {
+    #[instrument(level = "error", skip_all)]
     async fn send_with_timeout_msg(self) -> eyre::Result<Response> {
         self.send().await.map_err(|e| {
             if e.is_timeout() || e.is_middleware() {

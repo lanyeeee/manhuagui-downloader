@@ -5,6 +5,7 @@ use scraper::{ElementRef, Html, Selector};
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use tauri::AppHandle;
+use tracing::instrument;
 
 use crate::{extensions::ToEyre, utils};
 
@@ -17,9 +18,9 @@ pub struct SearchResult {
 }
 
 impl SearchResult {
+    #[instrument(level = "error", skip_all)]
     pub fn from_html(app: &AppHandle, html: &str) -> eyre::Result<SearchResult> {
-        let id_to_dir_map =
-            utils::create_id_to_dir_map(app).wrap_err("创建漫画ID到下载目录映射失败")?;
+        let id_to_dir_map = utils::create_id_to_dir_map(app)?;
 
         let document = Html::parse_document(html);
         let book_result_selector = Selector::parse(".book-result .cf").to_eyre()?;
@@ -95,6 +96,7 @@ pub struct ComicInSearch {
 }
 
 impl ComicInSearch {
+    #[instrument(level = "error", skip_all)]
     pub fn from_li(
         li: &ElementRef,
         id_to_dir_map: &HashMap<i64, PathBuf>,
@@ -184,6 +186,7 @@ impl ComicInSearch {
     }
 }
 
+#[instrument(level = "error", skip_all)]
 fn get_id_and_title_and_subtitle(dt: ElementRef) -> eyre::Result<(i64, String, Option<String>)> {
     let a = dt
         .select(&Selector::parse("dt > a").to_eyre()?)
@@ -214,6 +217,7 @@ fn get_id_and_title_and_subtitle(dt: ElementRef) -> eyre::Result<(i64, String, O
     Ok((id, title, subtitle))
 }
 
+#[instrument(level = "error", skip_all)]
 fn get_status_and_update_time(status_dd: &ElementRef) -> eyre::Result<(String, String)> {
     let spans = status_dd
         .select(&Selector::parse("span > span").to_eyre()?)
@@ -240,6 +244,7 @@ fn get_status_and_update_time(status_dd: &ElementRef) -> eyre::Result<(String, S
     Ok((status, update_time))
 }
 
+#[instrument(level = "error", skip_all)]
 fn get_year_and_region_and_genres(
     info_dd: &ElementRef,
 ) -> eyre::Result<(i64, String, Vec<String>)> {

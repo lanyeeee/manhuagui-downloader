@@ -5,6 +5,7 @@ use scraper::{ElementRef, Html, Selector};
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use tauri::AppHandle;
+use tracing::instrument;
 
 use crate::{extensions::ToEyre, utils};
 
@@ -17,9 +18,9 @@ pub struct GetFavoriteResult {
 }
 
 impl GetFavoriteResult {
+    #[instrument(level = "error", skip_all)]
     pub fn from_html(app: &AppHandle, html: &str) -> eyre::Result<GetFavoriteResult> {
-        let id_to_dir_map =
-            utils::create_id_to_dir_map(app).wrap_err("创建漫画ID到下载目录映射失败")?;
+        let id_to_dir_map = utils::create_id_to_dir_map(app)?;
 
         let document = Html::parse_document(html);
         let mut comics = Vec::new();
@@ -89,6 +90,7 @@ pub struct ComicInFavorite {
 }
 
 impl ComicInFavorite {
+    #[instrument(level = "error", skip_all)]
     pub fn from_div(
         div: &ElementRef,
         id_to_dir_map: &HashMap<i64, PathBuf>,

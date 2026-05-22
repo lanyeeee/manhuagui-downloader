@@ -8,6 +8,7 @@ use regex::{Captures, Regex};
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use tauri::AppHandle;
+use tracing::instrument;
 
 use crate::{extensions::AppHandleExt, types::Comic, utils};
 
@@ -40,6 +41,17 @@ pub struct ChapterInfo {
 }
 
 impl ChapterInfo {
+    #[instrument(
+        level = "error",
+        skip_all,
+        fields(
+            comic_id = self.comic_id,
+            comic_title = self.comic_title,
+            group_name = self.group_name,
+            chapter_id = self.chapter_id,
+            order = self.order
+        )
+    )]
     pub fn save_metadata(&self) -> eyre::Result<()> {
         let mut chapter_info = self.clone();
         // 将is_downloaded和chapter_download_dir字段设置为None
@@ -65,6 +77,17 @@ impl ChapterInfo {
         Ok(())
     }
 
+    #[instrument(
+        level = "error",
+        skip_all,
+        fields(
+            comic_id = self.comic_id,
+            comic_title = self.comic_title,
+            group_name = self.group_name,
+            chapter_id = self.chapter_id,
+            order = self.order
+        )
+    )]
     pub fn get_temp_download_dir(&self) -> eyre::Result<PathBuf> {
         let chapter_download_dir = self
             .chapter_download_dir
@@ -88,6 +111,17 @@ impl ChapterInfo {
         Ok(temp_download_dir)
     }
 
+    #[instrument(
+        level = "error",
+        skip_all,
+        fields(
+            comic_id = comic.id,
+            comic_title = comic.title,
+            group_name = self.group_name,
+            chapter_id = self.chapter_id,
+            order = self.order
+        )
+    )]
     pub fn get_chapter_relative_dir(&self, comic: &Comic) -> eyre::Result<PathBuf> {
         let comic_download_dir = comic
             .comic_download_dir
@@ -110,6 +144,19 @@ impl ChapterInfo {
         Ok(relative_dir.to_path_buf())
     }
 
+    #[instrument(
+        level = "error",
+        skip_all,
+        fields(
+            comic_id = fmt_params.comic_id,
+            comic_title = fmt_params.comic_title,
+            author = fmt_params.author,
+            group_name = fmt_params.group_name,
+            chapter_id = fmt_params.chapter_id,
+            chapter_title = fmt_params.chapter_title,
+            order = fmt_params.order
+        )
+    )]
     pub fn get_chapter_download_dir_by_fmt(
         app: &AppHandle,
         comic_download_dir: &Path,
@@ -137,8 +184,7 @@ impl ChapterInfo {
             .collect();
 
         let mut chapter_dir_fmt = app.get_config().read().chapter_dir_fmt.clone();
-        Self::preprocess_order_placeholder(&mut chapter_dir_fmt, &vars)
-            .wrap_err("预处理`order`占位符失败")?;
+        Self::preprocess_order_placeholder(&mut chapter_dir_fmt, &vars)?;
 
         let dir_fmt_parts: Vec<&str> = chapter_dir_fmt.split('/').collect();
 
@@ -159,6 +205,7 @@ impl ChapterInfo {
         Ok(chapter_download_dir)
     }
 
+    #[instrument(level = "error", skip_all, fields(fmt = fmt))]
     pub fn preprocess_order_placeholder(
         fmt: &mut String,
         vars: &HashMap<String, String>,

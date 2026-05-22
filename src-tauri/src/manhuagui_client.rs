@@ -8,6 +8,7 @@ use reqwest_middleware::ClientWithMiddleware;
 use reqwest_retry::{policies::ExponentialBackoff, Jitter, RetryTransientMiddleware};
 use serde_json::json;
 use tauri::AppHandle;
+use tracing::instrument;
 
 use crate::{
     config::ProxyMode,
@@ -38,6 +39,7 @@ impl ManhuaguiClient {
         }
     }
 
+    #[instrument(level = "error", skip_all)]
     pub fn reload_client(&self) {
         let api_client = create_api_client(&self.app);
         *self.api_client.write() = api_client;
@@ -45,6 +47,7 @@ impl ManhuaguiClient {
         *self.img_client.write() = img_client;
     }
 
+    #[instrument(level = "error", skip_all)]
     pub async fn login(&self, username: &str, password: &str) -> eyre::Result<String> {
         let params = json!({"action": "user_login"});
         let form = json!({
@@ -79,6 +82,7 @@ impl ManhuaguiClient {
         Ok(cookie)
     }
 
+    #[instrument(level = "error", skip_all)]
     pub async fn get_user_profile(&self) -> eyre::Result<UserProfile> {
         let cookie = self.app.get_config().read().cookie.clone();
         // 发送获取用户信息请求
@@ -101,6 +105,11 @@ impl ManhuaguiClient {
         Ok(user_profile)
     }
 
+    #[instrument(
+        level = "error",
+        skip_all,
+        fields(keyword = keyword, page_num = page_num)
+    )]
     pub async fn search(&self, keyword: &str, page_num: i64) -> eyre::Result<SearchResult> {
         let url = format!("https://www.manhuagui.com/s/{keyword}_p{page_num}.html");
         let request = self.api_client.read().get(url);
@@ -115,6 +124,7 @@ impl ManhuaguiClient {
         Ok(search_result)
     }
 
+    #[instrument(level = "error", skip_all, fields(comic_id = id))]
     pub async fn get_comic(&self, id: i64) -> eyre::Result<Comic> {
         let request = self
             .api_client
@@ -131,6 +141,16 @@ impl ManhuaguiClient {
         Ok(comic)
     }
 
+    #[instrument(
+        level = "error",
+        skip_all,
+        fields(
+            comic_id = chapter_info.comic_id,
+            comic_title = chapter_info.comic_title,
+            group_name = chapter_info.group_name,
+            chapter_id = chapter_info.chapter_id
+        )
+    )]
     pub async fn get_img_urls(&self, chapter_info: &ChapterInfo) -> eyre::Result<Vec<String>> {
         let comic_id = chapter_info.comic_id;
         let chapter_id = chapter_info.chapter_id;
@@ -156,6 +176,7 @@ impl ManhuaguiClient {
         Ok(urls)
     }
 
+    #[instrument(level = "error", skip_all, fields(url = url))]
     pub async fn get_img_bytes(&self, url: &str) -> eyre::Result<Bytes> {
         // 发送下载图片请求
         let request = self
@@ -176,6 +197,7 @@ impl ManhuaguiClient {
         Ok(image_data)
     }
 
+    #[instrument(level = "error", skip_all, fields(page_num = page_num))]
     pub async fn get_favorite(&self, page_num: i64) -> eyre::Result<GetFavoriteResult> {
         let cookie = self.app.get_config().read().cookie.clone();
         // 发送获取收藏夹请求

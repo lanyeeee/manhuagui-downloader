@@ -7,6 +7,7 @@ use eyre::{eyre, OptionExt, WrapErr};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use tauri::AppHandle;
 use tauri_specta::Event;
+use tracing::instrument;
 use zip::{write::SimpleFileOptions, ZipWriter};
 
 use crate::{
@@ -35,8 +36,12 @@ impl Drop for CbzErrorEventGuard {
 #[allow(clippy::cast_possible_wrap)]
 #[allow(clippy::cast_possible_truncation)]
 #[allow(clippy::too_many_lines)]
+#[instrument(
+    level = "error",
+    skip_all,
+    fields(comic_id = comic.id, comic_title = comic.title)
+)]
 pub fn cbz(app: &AppHandle, comic: &Comic) -> eyre::Result<()> {
-    let comic_title = &comic.title;
     let downloaded_chapters = get_downloaded_chapters(comic.groups.clone());
     // 生成格式化的xml
     let xml_cfg = yaserde::ser::Config {
@@ -62,61 +67,63 @@ pub fn cbz(app: &AppHandle, comic: &Comic) -> eyre::Result<()> {
     let extension = Archive::Cbz.extension();
     let comic_export_dir = comic
         .get_comic_export_dir(app)
-        .wrap_err(format!("`{comic_title}` 获取导出目录失败"))?;
+        .wrap_err("获取导出目录失败")?;
     let cbz_export_dir = comic_export_dir.join(extension);
 
     // 并发处理
+    let current_span = tracing::Span::current();
     let downloaded_chapters = downloaded_chapters.into_par_iter();
     downloaded_chapters.try_for_each(|chapter_info| -> eyre::Result<()> {
-        let chapter_title = chapter_info.chapter_title.clone();
-        let group_name = &chapter_info.group_name;
-        let err_prefix = format!("`{comic_title} - {group_name} - {chapter_title}`");
+        let _enter = current_span.enter();
+        let span = tracing::error_span!(
+            "export_cbz_rayon",
+            group_name = chapter_info.group_name,
+            chapter_title = chapter_info.chapter_title,
+            chapter_id = chapter_info.chapter_id,
+            order = chapter_info.order
+        );
+        let _enter = span.enter();
+
         // 生成ComicInfo
         let comic_info = ComicInfo::from(comic, &chapter_info);
         // 序列化ComicInfo为xml
         let comic_info_xml = yaserde::ser::to_string_with_config(&comic_info, &xml_cfg)
-            .map_err(|err_msg| eyre!("{err_prefix} 序列化`ComicInfo.xml`失败: {err_msg}"))?;
+            .map_err(|err_msg| eyre!("序列化`ComicInfo.xml`失败: {err_msg}"))?;
         // 创建cbz文件
         let chapter_download_dir = chapter_info
             .chapter_download_dir
             .as_ref()
-            .ok_or_eyre(format!("{err_prefix} `chapter_download_dir`字段为`None`"))?;
+            .ok_or_eyre("`chapter_download_dir`字段为`None`")?;
         let chapter_download_dir_name = chapter_download_dir
             .file_name()
             .and_then(|name| name.to_str())
             .ok_or_eyre(format!(
-                "{err_prefix} 获取`{}`的目录名失败",
+                "获取`{}`的目录名失败",
                 chapter_download_dir.display()
             ))?;
         let chapter_relative_dir = chapter_info
             .get_chapter_relative_dir(comic)
-            .wrap_err(format!("{err_prefix} 获取章节相对目录失败"))?;
-        let chapter_relative_dir_parent = chapter_relative_dir.parent().ok_or_eyre(format!(
-            "{err_prefix} `{}`没有父目录",
-            chapter_relative_dir.display()
-        ))?;
+            .wrap_err("获取章节相对目录失败")?;
+        let chapter_relative_dir_parent = chapter_relative_dir
+            .parent()
+            .ok_or_eyre(format!("`{}`没有父目录", chapter_relative_dir.display()))?;
         let chapter_export_dir = cbz_export_dir.join(chapter_relative_dir_parent);
         // 保证导出目录存在
-        std::fs::create_dir_all(&chapter_export_dir).wrap_err(format!(
-            "{err_prefix} 创建目录`{}`失败",
-            chapter_export_dir.display()
-        ))?;
+        std::fs::create_dir_all(&chapter_export_dir)
+            .wrap_err(format!("创建目录`{}`失败", chapter_export_dir.display()))?;
         let zip_path = chapter_export_dir.join(format!("{chapter_download_dir_name}.{extension}"));
         let zip_file = std::fs::File::create(&zip_path)
-            .wrap_err(format!("{err_prefix} 创建文件`{}`失败", zip_path.display()))?;
+            .wrap_err(format!("创建文件`{}`失败", zip_path.display()))?;
         let mut zip_writer = ZipWriter::new(zip_file);
         // 把ComicInfo.xml写入cbz
         zip_writer
             .start_file("ComicInfo.xml", SimpleFileOptions::default())
-            .wrap_err(format!(
-                "{err_prefix} 在`{}`创建`ComicInfo.xml`失败",
-                zip_path.display()
-            ))?;
+            .wrap_err(format!("在`{}`创建`ComicInfo.xml`失败", zip_path.display()))?;
         zip_writer
             .write_all(comic_info_xml.as_bytes())
-            .wrap_err(format!("{err_prefix} 写入`ComicInfo.xml`失败"))?;
+            .wrap_err("写入`ComicInfo.xml`失败")?;
         let image_paths = get_image_paths(chapter_download_dir).wrap_err(format!(
-            "{err_prefix} 获取`{}`中的图片失败",
+            "获取`{}`中的图片失败",
             chapter_download_dir.display()
         ))?;
 
@@ -124,21 +131,15 @@ pub fn cbz(app: &AppHandle, comic: &Comic) -> eyre::Result<()> {
             let filename = image_path
                 .file_name()
                 .and_then(|name| name.to_str())
-                .ok_or_eyre(format!(
-                    "{err_prefix} 获取`{}`的目录名失败",
-                    chapter_download_dir.display()
-                ))?;
+                .ok_or_eyre(format!("获取`{}`的文件名失败", image_path.display()))?;
             // 将文件写入cbz
             zip_writer
                 .start_file(filename, SimpleFileOptions::default())
-                .wrap_err(format!(
-                    "{err_prefix} 在`{}`创建`{filename:?}`失败",
-                    zip_path.display()
-                ))?;
+                .wrap_err(format!("在`{}`创建`{filename:?}`失败", zip_path.display()))?;
             let mut file = std::fs::File::open(&image_path)
-                .wrap_err(format!("{err_prefix} 打开`{}`失败", image_path.display()))?;
+                .wrap_err(format!("打开`{}`失败", image_path.display()))?;
             std::io::copy(&mut file, &mut zip_writer).wrap_err(format!(
-                "{err_prefix} 将`{}`写入`{}`失败",
+                "将`{}`写入`{}`失败",
                 image_path.display(),
                 zip_path.display()
             ))?;
@@ -146,7 +147,7 @@ pub fn cbz(app: &AppHandle, comic: &Comic) -> eyre::Result<()> {
 
         zip_writer
             .finish()
-            .wrap_err(format!("{err_prefix} 关闭`{}`失败", zip_path.display()))?;
+            .wrap_err(format!("关闭`{}`失败", zip_path.display()))?;
         // 更新导出cbz的进度
         let current = current.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
         // 发送导出cbz进度事件
