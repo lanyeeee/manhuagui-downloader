@@ -10,24 +10,12 @@ import LogDialog from './dialogs/LogDialog.vue'
 import AboutDialog from './dialogs/AboutDialog.vue'
 import SettingsDialog from './dialogs/SettingsDialog.vue'
 import { onMounted, ref, watch } from 'vue'
-import {
-  NAvatar,
-  NButton,
-  NIcon,
-  NInput,
-  NInputGroup,
-  NInputGroupLabel,
-  NTabPane,
-  NTabs,
-  useMessage,
-  useNotification,
-} from 'naive-ui'
+import { NAvatar, NButton, NIcon, NInput, NInputGroup, NInputGroupLabel, NTabPane, NTabs, useMessage } from 'naive-ui'
 import { useStore } from './store.ts'
 import { PhClockCounterClockwise, PhGearSix, PhInfo, PhUser } from '@phosphor-icons/vue'
 
 const store = useStore()
 
-const notification = useNotification()
 const message = useMessage()
 
 const logDialogShowing = ref<boolean>(false)
@@ -82,31 +70,6 @@ onMounted(async () => {
   }
   // 获取配置
   store.config = await commands.getConfig()
-  // 检查日志目录大小
-  const result = await commands.getLogsDirSize()
-  if (result.status === 'error') {
-    console.error(result.error)
-    return
-  }
-  if (result.data > 50 * 1024 * 1024) {
-    notification.warning({
-      title: '日志目录大小超过50MB，请及时清理日志文件',
-      description: () => (
-        <>
-          <div>
-            点击右上角的 <span class="bg-gray-2 px-1">查看日志</span> 按钮
-          </div>
-          <div>
-            里边有 <span class="bg-gray-2 px-1">打开日志目录</span> 按钮
-          </div>
-          <div>
-            你也可以在里边取消勾选 <span class="bg-gray-2 px-1">输出文件日志</span>
-          </div>
-          <div>这样将不再产生文件日志</div>
-        </>
-      ),
-    })
-  }
 })
 </script>
 

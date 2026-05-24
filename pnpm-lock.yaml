@@ -41,6 +41,9 @@ importers:
       unocss:
         specifier: ^0.65.4
         version: 0.65.4(postcss@8.5.6)(rollup@4.30.1)(vite@6.0.7(@types/node@20.19.30)(jiti@2.4.2)(tsx@4.21.0))(vue@3.5.27(typescript@5.6.3))
+      virtua:
+        specifier: ^0.48.6
+        version: 0.48.8(vue@3.5.27(typescript@5.6.3))
       vue:
         specifier: ^3.5.27
         version: 3.5.27(typescript@5.6.3)
@@ -1983,6 +1986,26 @@ packages:
     resolution: {integrity: sha512-H9V1zGRLQZg9b+GdMk8MXDN2Lva0zx72MPahDKc30v+DtwKjfyOSXWRIX4t2mhDubM1H09gPhWeth/BJWPHGUw==}
     peerDependencies:
       vue: ^3.0.11
+
+  virtua@0.48.8:
+    resolution: {integrity: sha512-jpsxOw5V4B6hg44JePRLo9DL0TV7N1lBEVtPjKpAJebXyhI2s9lfiXJESaLapNtr3vtiSk/pWHiLf7B2a6UcgQ==}
+    peerDependencies:
+      react: '>=16.14.0'
+      react-dom: '>=16.14.0'
+      solid-js: '>=1.0'
+      svelte: '>=5.0'
+      vue: '>=3.2'
+    peerDependenciesMeta:
+      react:
+        optional: true
+      react-dom:
+        optional: true
+      solid-js:
+        optional: true
+      svelte:
+        optional: true
+      vue:
+        optional: true
 
   vite@6.0.7:
     resolution: {integrity: sha512-RDt8r/7qx9940f8FcOIAH9PTViRrghKaK2K1jY3RaAURrEUbm9Du1mJ72G+jlhtG3WwodnfzY8ORQZbBavZEAQ==}
@@ -3993,6 +4016,10 @@ snapshots:
   vdirs@0.1.8(vue@3.5.27(typescript@5.6.3)):
     dependencies:
       evtd: 0.2.4
+      vue: 3.5.27(typescript@5.6.3)
+
+  virtua@0.48.8(vue@3.5.27(typescript@5.6.3)):
+    optionalDependencies:
       vue: 3.5.27(typescript@5.6.3)
 
   vite@6.0.7(@types/node@20.19.30)(jiti@2.4.2)(tsx@4.21.0):
