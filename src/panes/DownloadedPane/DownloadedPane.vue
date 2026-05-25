@@ -10,21 +10,20 @@ import UpdateDownloadedComicsButton from './components/UpdateDownloadedComicsBut
 
 const store = useStore()
 
-const downloadedComics = ref<Comic[]>([])
 const currentPage = ref<number>(1)
 
 const PAGE_SIZE = 20
 const pageCount = computed(() => {
-  if (downloadedComics.value.length === 0) {
+  if (store.downloadedComics.length === 0) {
     return 1
   }
 
-  return Math.ceil(downloadedComics.value.length / PAGE_SIZE)
+  return Math.ceil(store.downloadedComics.length / PAGE_SIZE)
 })
 const showingDownloadedComics = computed<Comic[]>(() => {
   const start = (currentPage.value - 1) * PAGE_SIZE
   const end = currentPage.value * PAGE_SIZE
-  return downloadedComics.value.slice(start, end)
+  return store.downloadedComics.slice(start, end)
 })
 
 watch(
@@ -34,7 +33,7 @@ watch(
       return
     }
 
-    downloadedComics.value = await commands.getDownloadedComics()
+    store.downloadedComics = await commands.getDownloadedComics()
   },
   { immediate: true },
 )

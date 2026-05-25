@@ -2,38 +2,99 @@ mod cbz;
 mod pdf;
 
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     path::{Path, PathBuf},
+    sync::Arc,
 };
 
-pub use cbz::cbz;
+pub use cbz::{cbz, cbz_chapters};
 use eyre::WrapErr;
-pub use pdf::pdf;
+use parking_lot::Mutex;
+pub use pdf::{pdf, pdf_chapters};
 use tracing::instrument;
 
 use crate::{extensions::PathIsImg, types::ChapterInfo};
 
-enum Archive {
-    Cbz,
-    Pdf,
+/// 导出互斥锁管理器，确保同一漫画的导出操作串行执行
+#[derive(Debug, Clone, Default)]
+pub struct ComicExportLock {
+    locked_comic_ids: Arc<Mutex<HashSet<i64>>>,
 }
 
-impl Archive {
+impl ComicExportLock {
+    pub fn new() -> Self {
+        Self {
+            locked_comic_ids: Arc::new(Mutex::new(HashSet::new())),
+        }
+    }
+
+    /// 尝试获取漫画导出锁，返回是否成功(如果该漫画正在导出则返回 false)
+    pub fn try_acquire(&self, comic_id: i64) -> bool {
+        let mut locked = self.locked_comic_ids.lock();
+        if locked.contains(&comic_id) {
+            return false;
+        }
+
+        locked.insert(comic_id);
+        true
+    }
+
+    /// 释放漫画导出锁
+    pub fn release(&self, comic_id: i64) {
+        self.locked_comic_ids.lock().remove(&comic_id);
+    }
+}
+
+struct ComicExportLockGuard {
+    lock: ComicExportLock,
+    comic_id: i64,
+}
+
+impl Drop for ComicExportLockGuard {
+    fn drop(&mut self) {
+        self.lock.release(self.comic_id);
+    }
+}
+
+enum ExportFormat {
+    Pdf,
+    Cbz,
+}
+
+impl ExportFormat {
     fn extension(&self) -> &str {
         match self {
-            Archive::Cbz => "cbz",
-            Archive::Pdf => "pdf",
+            ExportFormat::Pdf => "pdf",
+            ExportFormat::Cbz => "cbz",
         }
     }
 }
 
 /// 获取已下载的章节
-fn get_downloaded_chapters(groups: HashMap<String, Vec<ChapterInfo>>) -> Vec<ChapterInfo> {
+fn get_downloaded_chapters(groups: &HashMap<String, Vec<ChapterInfo>>) -> Vec<ChapterInfo> {
     groups
-        .into_iter()
-        .flat_map(|(_, chapters)| chapters)
+        .values()
+        .flatten()
         .filter(|chapter| chapter.is_downloaded.unwrap_or(false))
-        .collect::<Vec<_>>()
+        .cloned()
+        .collect()
+}
+
+/// 根据章节ID列表获取已下载的章节
+fn get_downloaded_chapters_by_ids(
+    groups: &HashMap<String, Vec<ChapterInfo>>,
+    chapter_ids: &[i64],
+) -> Vec<ChapterInfo> {
+    let id_set: HashSet<_> = chapter_ids.iter().copied().collect();
+
+    groups
+        .values()
+        .flatten()
+        .filter(|chapter| {
+            chapter.is_downloaded.unwrap_or(false) && id_set.contains(&chapter.chapter_id)
+        })
+        .cloned()
+        .collect()
 }
 
 #[instrument(level = "error", skip_all, fields(images_dir = %images_dir.display()))]

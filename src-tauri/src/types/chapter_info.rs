@@ -33,6 +33,12 @@ pub struct ChapterInfo {
     pub order: f64,
     /// 漫画状态(连载中/已完结)
     pub comic_status: String,
+    /// 是否曾导出过PDF
+    #[serde(default)]
+    pub is_pdf_exported: bool,
+    /// 是否曾导出过CBZ
+    #[serde(default)]
+    pub is_cbz_exported: bool,
     /// 是否已下载
     #[serde(skip_serializing_if = "Option::is_none")]
     pub is_downloaded: Option<bool>,

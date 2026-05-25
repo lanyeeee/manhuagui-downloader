@@ -78,6 +78,22 @@ async exportPdf(comic: Comic) : Promise<Result<null, CommandError>> {
     else return { status: "error", error: e  as any };
 }
 },
+async exportCbzChapters(comic: Comic, chapterIds: number[]) : Promise<Result<null, CommandError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("export_cbz_chapters", { comic, chapterIds }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async exportPdfChapters(comic: Comic, chapterIds: number[]) : Promise<Result<null, CommandError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("export_pdf_chapters", { comic, chapterIds }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async updateDownloadedComics() : Promise<Result<null, CommandError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("update_downloaded_comics") };
@@ -228,6 +244,14 @@ order: number;
  * 漫画状态(连载中/已完结)
  */
 comicStatus: string; 
+/**
+ * 是否曾导出过PDF
+ */
+isPdfExported?: boolean; 
+/**
+ * 是否曾导出过CBZ
+ */
+isCbzExported?: boolean; 
 /**
  * 是否已下载
  */
@@ -380,11 +404,31 @@ isDownloaded: boolean;
  */
 comicDownloadDir: string }
 export type CommandError = { err_title: string; message: string }
-export type Config = { cookie: string; downloadDir: string; exportDir: string; enableFileLogger: boolean; chapterConcurrency: number; chapterDownloadIntervalSec: number; imgConcurrency: number; imgDownloadIntervalSec: number; updateGetComicIntervalSec: number; proxyMode: ProxyMode; proxyHost: string; proxyPort: number; comicDirFmt: string; chapterDirFmt: string; createPdfConcurrency: number; enableMergePdf: boolean }
+export type Config = { cookie: string; downloadDir: string; exportDir: string; enableFileLogger: boolean; chapterConcurrency: number; chapterDownloadIntervalSec: number; imgConcurrency: number; imgDownloadIntervalSec: number; updateGetComicIntervalSec: number; proxyMode: ProxyMode; proxyHost: string; proxyPort: number; comicDirFmt: string; chapterDirFmt: string; createPdfConcurrency: number; enableMergePdf: boolean; 
+/**
+ * 导出跳过模式
+ */
+exportSkipMode: ExportSkipMode }
 export type DownloadEvent = { event: "Speed"; data: { speed: string } } | { event: "Sleeping"; data: { chapterId: number; remainingSec: number } } | { event: "TaskCreate"; data: { state: DownloadTaskState; comic: Comic; chapterInfo: ChapterInfo; downloadedImgCount: number; totalImgCount: number } } | { event: "TaskDelete"; data: { chapterId: number } } | { event: "TaskUpdate"; data: { state: DownloadTaskState; chapterId: number; downloadedImgCount: number; totalImgCount: number } }
 export type DownloadTaskState = "Pending" | "Downloading" | "Paused" | "Completed" | "Failed"
-export type ExportCbzEvent = { event: "Start"; data: { uuid: string; comicTitle: string; total: number } } | { event: "Progress"; data: { uuid: string; current: number } } | { event: "Error"; data: { uuid: string } } | { event: "End"; data: { uuid: string; chapterExportDir: string } }
-export type ExportPdfEvent = { event: "CreateStart"; data: { uuid: string; comicTitle: string; total: number } } | { event: "CreateProgress"; data: { uuid: string; current: number } } | { event: "CreateError"; data: { uuid: string } } | { event: "CreateEnd"; data: { uuid: string; chapterExportDir: string } } | { event: "MergeStart"; data: { uuid: string; comicTitle: string; total: number } } | { event: "MergeProgress"; data: { uuid: string; current: number } } | { event: "MergeError"; data: { uuid: string } } | { event: "MergeEnd"; data: { uuid: string; chapterExportDir: string } }
+export type ExportCbzEvent = { event: "Start"; data: { uuid: string; comicTitle: string; total: number } } | { event: "Progress"; data: { uuid: string; current: number } } | { event: "Error"; data: { uuid: string } } | { event: "End"; data: { uuid: string; comicId: number; chapterExportDir: string } }
+export type ExportPdfEvent = { event: "CreateStart"; data: { uuid: string; comicTitle: string; total: number } } | { event: "CreateProgress"; data: { uuid: string; current: number } } | { event: "CreateError"; data: { uuid: string } } | { event: "CreateEnd"; data: { uuid: string; comicId: number; chapterExportDir: string } } | { event: "MergeStart"; data: { uuid: string; comicTitle: string; total: number } } | { event: "MergeProgress"; data: { uuid: string; current: number } } | { event: "MergeError"; data: { uuid: string } } | { event: "MergeEnd"; data: { uuid: string; comicId: number; chapterExportDir: string } }
+/**
+ * 导出跳过模式
+ */
+export type ExportSkipMode = 
+/**
+ * 每次重新导出所有章节
+ */
+"None" | 
+/**
+ * 跳过本地已存在的导出文件
+ */
+"SkipExisting" | 
+/**
+ * 跳过曾导出过的章节(即使本地文件已删除)
+ */
+"SkipExported"
 export type GetFavoriteResult = { comics: ComicInFavorite[]; current: number; total: number }
 export type JsonValue = null | boolean | number | string | JsonValue[] | { [key in string]: JsonValue }
 export type LogEvent = { jsonRaw: string }

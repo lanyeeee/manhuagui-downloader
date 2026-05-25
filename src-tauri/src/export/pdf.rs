@@ -5,7 +5,7 @@ use std::{
     sync::{atomic::AtomicU32, Arc},
 };
 
-use eyre::{OptionExt, WrapErr};
+use eyre::{eyre, OptionExt, WrapErr};
 use float_ord::FloatOrd;
 use lopdf::{
     content::{Content, Operation},
@@ -18,10 +18,14 @@ use tauri_specta::Event;
 use tracing::instrument;
 
 use crate::{
+    config::ExportSkipMode,
     events::ExportPdfEvent,
-    export::{get_downloaded_chapters, get_image_paths, Archive},
+    export::{
+        get_downloaded_chapters, get_downloaded_chapters_by_ids, get_image_paths,
+        ComicExportLockGuard, ExportFormat,
+    },
     extensions::AppHandleExt,
-    types::Comic,
+    types::{ChapterInfo, Comic},
     utils,
 };
 
@@ -67,13 +71,79 @@ impl Drop for PdfMergeErrorEventGuard {
     fields(comic_id = comic.id, comic_title = comic.title)
 )]
 pub fn pdf(app: &AppHandle, comic: &Comic) -> eyre::Result<()> {
+    let comic_id = comic.id;
     let comic_title = &comic.title;
-    let downloaded_chapters = get_downloaded_chapters(comic.groups.clone());
+    let export_lock = app.get_export_lock().inner().clone();
+
+    // 检查导出锁
+    if !export_lock.try_acquire(comic_id) {
+        return Err(eyre!("漫画`{comic_title}`正在导出，请稍后再试"));
+    }
+
+    let _guard = ComicExportLockGuard {
+        lock: export_lock.clone(),
+        comic_id,
+    };
+
+    // 获取配置
+    let config = app.get_config();
+    let config_guard = config.read();
+    let skip_mode = config_guard.export_skip_mode;
+    let enable_merge_pdf = config_guard.enable_merge_pdf;
+    let enable_merge = !matches!(skip_mode, ExportSkipMode::SkipExported) && enable_merge_pdf;
+    drop(config_guard);
+
+    // 获取已下载章节
+    let downloaded_chapters = get_downloaded_chapters(&comic.groups);
+
+    // 调用内部实现
+    pdf_internal(app, comic, downloaded_chapters, skip_mode, enable_merge)
+}
+
+#[allow(clippy::cast_possible_truncation)]
+#[allow(clippy::too_many_lines)]
+#[instrument(
+    level = "error",
+    skip_all,
+    fields(comic_id = comic.id, comic_title = comic.title)
+)]
+pub fn pdf_chapters(app: &AppHandle, comic: &Comic, chapter_ids: Vec<i64>) -> eyre::Result<()> {
+    let comic_id = comic.id;
+    let comic_title = &comic.title;
+    let export_lock = app.get_export_lock().inner().clone();
+
+    // 检查导出锁
+    if !export_lock.try_acquire(comic_id) {
+        return Err(eyre!("漫画`{comic_title}`正在导出，请稍后再试"));
+    }
+
+    let _guard = ComicExportLockGuard {
+        lock: export_lock.clone(),
+        comic_id,
+    };
+
+    // 获取指定章节
+    let downloaded_chapters = get_downloaded_chapters_by_ids(&comic.groups, &chapter_ids);
+
+    // 调用内部实现(用户主动选择，不跳过，不合并)
+    pdf_internal(app, comic, downloaded_chapters, ExportSkipMode::None, false)
+}
+
+#[allow(clippy::cast_possible_truncation)]
+#[allow(clippy::too_many_lines)]
+#[instrument(level = "error", skip_all, fields(skip_mode = ?skip_mode))]
+fn pdf_internal(
+    app: &AppHandle,
+    comic: &Comic,
+    downloaded_chapters: Vec<ChapterInfo>,
+    skip_mode: ExportSkipMode,
+    enable_merge: bool,
+) -> eyre::Result<()> {
     let create_event_uuid = uuid::Uuid::new_v4().to_string();
     // 发送开始创建pdf事件
     let _ = ExportPdfEvent::CreateStart {
         uuid: create_event_uuid.clone(),
-        comic_title: comic_title.clone(),
+        comic_title: comic.title.clone(),
         total: downloaded_chapters.len() as u32,
     }
     .emit(app);
@@ -86,13 +156,15 @@ pub fn pdf(app: &AppHandle, comic: &Comic) -> eyre::Result<()> {
     // 用来记录创建pdf的进度
     let created_count = Arc::new(AtomicU32::new(0));
 
-    let extension = Archive::Pdf.extension();
+    let extension = ExportFormat::Pdf.extension();
     let comic_export_dir = comic
         .get_comic_export_dir(app)
         .wrap_err("获取导出目录失败")?;
+
+    // 章节和它们对应的pdf路径(用于合并)
     let pdf_export_dir = comic_export_dir.join(extension);
-    // 章节和他们对应的pdf路径
-    let chapter_and_pdf_path_pairs = Mutex::new(Vec::new());
+    let chapter_and_pdf_path_pairs = Arc::new(Mutex::new(Vec::new()));
+
     // 并发处理
     let current_span = tracing::Span::current();
     let create_pdf_concurrency = app.get_config().read().create_pdf_concurrency;
@@ -100,81 +172,137 @@ pub fn pdf(app: &AppHandle, comic: &Comic) -> eyre::Result<()> {
         .num_threads(create_pdf_concurrency)
         .build()
         .wrap_err("rayon线程池创建失败")?;
-    thread_pool.install(|| {
-        let downloaded_chapters = downloaded_chapters.into_par_iter();
-        downloaded_chapters.try_for_each(|chapter_info| -> eyre::Result<()> {
-            let _enter = current_span.enter();
-            let span = tracing::error_span!(
-                "export_pdf_rayon",
-                group_name = chapter_info.group_name,
-                chapter_title = chapter_info.chapter_title,
-                chapter_id = chapter_info.chapter_id,
-                order = chapter_info.order
-            );
-            let _enter = span.enter();
 
-            // 创建pdf文件
-            let chapter_download_dir = chapter_info
-                .chapter_download_dir
-                .as_ref()
-                .ok_or_eyre("`chapter_download_dir`字段为`None`")?;
-            let chapter_download_dir_name = chapter_download_dir
-                .file_name()
-                .and_then(|name| name.to_str())
-                .ok_or_eyre(format!(
-                    "获取`{}`的目录名失败",
+    thread_pool.install(|| {
+        downloaded_chapters
+            .into_par_iter()
+            .try_for_each(|mut chapter_info| -> eyre::Result<()> {
+                let _enter = current_span.enter();
+
+                let span = tracing::error_span!(
+                    "export_pdf_rayon",
+                    group_name = chapter_info.group_name,
+                    chapter_title = chapter_info.chapter_title,
+                    chapter_id = chapter_info.chapter_id,
+                    order = chapter_info.order
+                );
+                let _enter = span.enter();
+
+                // 创建pdf文件
+                let chapter_download_dir = chapter_info
+                    .chapter_download_dir
+                    .as_ref()
+                    .ok_or_eyre("`chapter_download_dir`字段为`None`")?;
+                let chapter_download_dir_name = chapter_download_dir
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .ok_or_eyre(format!(
+                        "获取`{}`的目录名失败",
+                        chapter_download_dir.display()
+                    ))?;
+                let chapter_relative_dir = chapter_info
+                    .get_chapter_relative_dir(comic)
+                    .wrap_err("获取章节相对目录失败")?;
+                let chapter_relative_dir_parent = chapter_relative_dir
+                    .parent()
+                    .ok_or_eyre(format!("`{}`没有父目录", chapter_relative_dir.display()))?;
+                let chapter_export_dir = pdf_export_dir.join(chapter_relative_dir_parent);
+                // 保证导出目录存在
+                std::fs::create_dir_all(&chapter_export_dir)
+                    .wrap_err(format!("创建目录`{}`失败", chapter_export_dir.display()))?;
+
+                let pdf_path =
+                    chapter_export_dir.join(format!("{chapter_download_dir_name}.{extension}"));
+
+                // 跳过逻辑
+                let should_skip = match skip_mode {
+                    ExportSkipMode::SkipExported if chapter_info.is_pdf_exported => true,
+                    ExportSkipMode::SkipExisting if pdf_path.exists() => true,
+                    _ => false,
+                };
+
+                if should_skip {
+                    // 如果文件存在且需要合并，记录路径
+                    if enable_merge && pdf_path.exists() {
+                        chapter_and_pdf_path_pairs
+                            .lock()
+                            .push((chapter_info.clone(), pdf_path));
+                    }
+                    // 更新进度
+                    let current =
+                        created_count.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+                    let _ = ExportPdfEvent::CreateProgress {
+                        uuid: create_event_uuid.clone(),
+                        current,
+                    }
+                    .emit(app);
+                    return Ok(());
+                }
+
+                let image_paths = get_image_paths(chapter_download_dir).wrap_err(format!(
+                    "获取`{}`中的图片失败",
                     chapter_download_dir.display()
                 ))?;
-            let chapter_relative_dir = chapter_info
-                .get_chapter_relative_dir(comic)
-                .wrap_err("获取章节相对目录失败")?;
-            let chapter_relative_dir_parent = chapter_relative_dir
-                .parent()
-                .ok_or_eyre(format!("`{}`没有父目录", chapter_relative_dir.display()))?;
-            let chapter_export_dir = pdf_export_dir.join(chapter_relative_dir_parent);
-            // 保证导出目录存在
-            std::fs::create_dir_all(&chapter_export_dir)
-                .wrap_err(format!("创建目录`{}`失败", chapter_export_dir.display()))?;
 
-            let pdf_path =
-                chapter_export_dir.join(format!("{chapter_download_dir_name}.{extension}"));
+                create_pdf(image_paths, &pdf_path).wrap_err("创建pdf失败")?;
 
-            let image_paths = get_image_paths(chapter_download_dir).wrap_err(format!(
-                "获取`{}`中的图片失败",
-                chapter_download_dir.display()
-            ))?;
+                // 更新章节导出状态
+                chapter_info.is_pdf_exported = true;
+                chapter_info.save_metadata()?;
 
-            create_pdf(image_paths, &pdf_path).wrap_err("创建pdf失败")?;
+                // 记录路径用于合并
+                chapter_and_pdf_path_pairs
+                    .lock()
+                    .push((chapter_info, pdf_path));
 
-            chapter_and_pdf_path_pairs
-                .lock()
-                .push((chapter_info, pdf_path));
-            // 更新创建pdf的进度
-            let current = created_count.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
-            // 发送创建pdf进度事件
-            let _ = ExportPdfEvent::CreateProgress {
-                uuid: create_event_uuid.clone(),
-                current,
-            }
-            .emit(app);
-            Ok(())
-        })
+                // 更新创建pdf的进度
+                let current = created_count.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+                // 发送创建pdf进度事件
+                let _ = ExportPdfEvent::CreateProgress {
+                    uuid: create_event_uuid.clone(),
+                    current,
+                }
+                .emit(app);
+
+                Ok(())
+            })
     })?;
+
     // 标记为成功，后面drop时就不会发送CreateError事件
     create_error_event_guard.success = true;
+
     // 发送创建pdf完成事件
     let _ = ExportPdfEvent::CreateEnd {
         uuid: create_event_uuid,
+        comic_id: comic.id,
         chapter_export_dir: pdf_export_dir.clone(),
     }
     .emit(app);
 
-    let enable_merge_pdf = app.get_config().read().enable_merge_pdf;
-    if !enable_merge_pdf {
-        return Ok(());
+    // 合并PDF
+    if enable_merge {
+        let chapter_and_pdf_path_pairs = std::mem::take(&mut *chapter_and_pdf_path_pairs.lock());
+        merge_pdf_files(
+            app,
+            comic.id,
+            &comic.title,
+            &pdf_export_dir,
+            chapter_and_pdf_path_pairs,
+        )?;
     }
 
-    let mut chapter_and_pdf_path_pairs = std::mem::take(&mut *chapter_and_pdf_path_pairs.lock());
+    Ok(())
+}
+
+#[allow(clippy::cast_possible_truncation)]
+#[instrument(level = "error", skip_all)]
+fn merge_pdf_files(
+    app: &AppHandle,
+    comic_id: i64,
+    comic_title: &str,
+    pdf_export_dir: &Path,
+    mut chapter_and_pdf_path_pairs: Vec<(ChapterInfo, PathBuf)>,
+) -> eyre::Result<()> {
     chapter_and_pdf_path_pairs.sort_by_key(|(chapter_info, _)| FloatOrd(chapter_info.order));
     let chapter_pdf_paths: Vec<PathBuf> = chapter_and_pdf_path_pairs
         .into_iter()
@@ -199,7 +327,7 @@ pub fn pdf(app: &AppHandle, comic: &Comic) -> eyre::Result<()> {
     // 发送开始合并pdf事件
     let _ = ExportPdfEvent::MergeStart {
         uuid: merge_event_uuid.clone(),
-        comic_title: comic_title.clone(),
+        comic_title: comic_title.to_string(),
         total: chapter_export_dir_to_pdf_paths.len() as u32,
     }
     .emit(app);
@@ -209,6 +337,9 @@ pub fn pdf(app: &AppHandle, comic: &Comic) -> eyre::Result<()> {
         app: app.clone(),
         success: false,
     };
+
+    let extension = ExportFormat::Pdf.extension();
+
     // 合并PDF很吃内存，为了减少爆内存的发生，不使用并发处理，而是逐个合并
     for (i, entry) in chapter_export_dir_to_pdf_paths.into_iter().enumerate() {
         let (chapter_export_dir, chapter_pdf_paths) = entry;
@@ -237,9 +368,11 @@ pub fn pdf(app: &AppHandle, comic: &Comic) -> eyre::Result<()> {
     // 发送合并pdf完成事件
     let _ = ExportPdfEvent::MergeEnd {
         uuid: merge_event_uuid,
-        chapter_export_dir: pdf_export_dir.clone(),
+        comic_id,
+        chapter_export_dir: pdf_export_dir.to_path_buf(),
     }
     .emit(app);
+
     Ok(())
 }
 

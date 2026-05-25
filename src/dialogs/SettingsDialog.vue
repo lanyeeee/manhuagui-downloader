@@ -13,6 +13,7 @@ import {
   NModal,
   NRadioButton,
   NRadioGroup,
+  NSelect,
   NTooltip,
   NCheckbox,
   useMessage,
@@ -27,6 +28,11 @@ const showing = defineModel<boolean>('showing', { required: true })
 const proxyHost = ref<string>(store.config?.proxyHost ?? '')
 const comicDirFmt = ref<string>(store.config?.comicDirFmt ?? '')
 const chapterDirFmt = ref<string>(store.config?.chapterDirFmt ?? '')
+const exportSkipModeOptions = [
+  { label: '不跳过，每次都重新导出', value: 'None' },
+  { label: '跳过已存在的文件', value: 'SkipExisting' },
+  { label: '跳过曾导出过的章节', value: 'SkipExported' },
+]
 
 async function showConfigPathInFileManager() {
   const configPath = await path.join(await appDataDir(), 'config.json')
@@ -139,6 +145,14 @@ async function showConfigPathInFileManager() {
           </n-input-group>
           <n-checkbox class="w-fit" v-model:checked="store.config.enableMergePdf">创建完成后是否自动合并</n-checkbox>
         </div>
+        <n-input-group class="mt-1">
+          <n-input-group-label size="small">导出策略</n-input-group-label>
+          <n-select
+            v-model:value="store.config.exportSkipMode"
+            :options="exportSkipModeOptions"
+            size="small"
+            class="w-50" />
+        </n-input-group>
 
         <span class="font-bold mt-2">漫画目录格式</span>
         <n-tooltip placement="top" trigger="hover">

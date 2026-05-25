@@ -286,6 +286,14 @@ impl Comic {
                     .ok_or_eyre(format!("`{}`没有父目录", metadata_path.display()))?;
                 chapter_info.chapter_download_dir = Some(parent.to_path_buf());
                 chapter_info.is_downloaded = Some(true);
+                chapter_info.is_pdf_exported = chapter_json
+                    .get("isPdfExported")
+                    .and_then(serde_json::Value::as_bool)
+                    .unwrap_or(false);
+                chapter_info.is_cbz_exported = chapter_json
+                    .get("isCbzExported")
+                    .and_then(serde_json::Value::as_bool)
+                    .unwrap_or(false);
             }
         }
 
@@ -769,6 +777,8 @@ fn get_groups(
                     group_size,
                     order,
                     comic_status: comic_status.to_string(),
+                    is_pdf_exported: false,
+                    is_cbz_exported: false,
                     is_downloaded: None,
                     chapter_download_dir: None,
                 });

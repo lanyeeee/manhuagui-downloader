@@ -7,7 +7,7 @@ use tauri::{Manager, State};
 use tracing::instrument;
 
 use crate::{
-    config::Config, downloader::download_manager::DownloadManager,
+    config::Config, downloader::download_manager::DownloadManager, export::ComicExportLock,
     manhuagui_client::ManhuaguiClient,
 };
 
@@ -58,6 +58,7 @@ pub trait AppHandleExt {
     fn get_config(&self) -> State<'_, RwLock<Config>>;
     fn get_manhuagui_client(&self) -> State<'_, ManhuaguiClient>;
     fn get_download_manager(&self) -> State<'_, DownloadManager>;
+    fn get_export_lock(&self) -> State<'_, ComicExportLock>;
 }
 
 impl AppHandleExt for tauri::AppHandle {
@@ -69,6 +70,9 @@ impl AppHandleExt for tauri::AppHandle {
     }
     fn get_download_manager(&self) -> State<'_, DownloadManager> {
         self.state::<DownloadManager>()
+    }
+    fn get_export_lock(&self) -> State<'_, ComicExportLock> {
+        self.state::<ComicExportLock>()
     }
 }
 

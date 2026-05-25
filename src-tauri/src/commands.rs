@@ -308,6 +308,44 @@ pub fn export_pdf(app: AppHandle, comic: Comic) -> CommandResult<()> {
     Ok(())
 }
 
+#[allow(clippy::needless_pass_by_value)]
+#[tauri::command(async)]
+#[specta::specta]
+#[instrument(
+    level = "error",
+    skip_all,
+    fields(comic_id = comic.id, comic_title = comic.title)
+)]
+pub fn export_cbz_chapters(
+    app: AppHandle,
+    comic: Comic,
+    chapter_ids: Vec<i64>,
+) -> CommandResult<()> {
+    export::cbz_chapters(&app, &comic, chapter_ids)
+        .map_err(|err| CommandError::from("漫画导出指定章节cbz失败", err))?;
+    tracing::debug!("漫画导出指定章节cbz成功");
+    Ok(())
+}
+
+#[allow(clippy::needless_pass_by_value)]
+#[tauri::command(async)]
+#[specta::specta]
+#[instrument(
+    level = "error",
+    skip_all,
+    fields(comic_id = comic.id, comic_title = comic.title)
+)]
+pub fn export_pdf_chapters(
+    app: AppHandle,
+    comic: Comic,
+    chapter_ids: Vec<i64>,
+) -> CommandResult<()> {
+    export::pdf_chapters(&app, &comic, chapter_ids)
+        .map_err(|err| CommandError::from("漫画导出指定章节pdf失败", err))?;
+    tracing::debug!("漫画导出指定章节pdf成功");
+    Ok(())
+}
+
 #[allow(clippy::cast_possible_wrap)]
 #[tauri::command(async)]
 #[specta::specta]

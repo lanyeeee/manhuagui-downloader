@@ -24,6 +24,7 @@ use crate::{
     events::{
         DownloadEvent, ExportCbzEvent, ExportPdfEvent, LogEvent, UpdateDownloadedComicsEvent,
     },
+    export::ComicExportLock,
 };
 
 fn generate_context() -> tauri::Context<Wry> {
@@ -47,6 +48,8 @@ pub fn run() {
             get_downloaded_comics,
             export_cbz,
             export_pdf,
+            export_cbz_chapters,
+            export_pdf_chapters,
             update_downloaded_comics,
             get_logs_dir_size,
             show_path_in_file_manager,
@@ -103,6 +106,9 @@ pub fn run() {
 
             let download_manager = DownloadManager::new(app.handle());
             app.manage(download_manager);
+
+            let export_lock = ComicExportLock::new();
+            app.manage(export_lock);
 
             logger::init(app.handle()).wrap_err("初始化日志系统失败")?;
 
