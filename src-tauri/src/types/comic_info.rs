@@ -2,6 +2,8 @@ use serde::{Deserialize, Serialize};
 use specta::Type;
 use yaserde::{YaDeserialize, YaSerialize};
 
+use crate::types::Comic;
+
 use super::ChapterInfo;
 
 /// 主要参考了[Kavita的文档](https://wiki.kavitareader.com/guides/metadata/comics/)
@@ -50,12 +52,7 @@ pub struct ComicInfo {
 }
 impl ComicInfo {
     #[allow(clippy::cast_possible_wrap)]
-    pub fn from(
-        chapter_info: ChapterInfo,
-        authors: &[String],
-        genre: &[String],
-        intro: String,
-    ) -> ComicInfo {
+    pub fn from(comic: &Comic, chapter_info: &ChapterInfo) -> ComicInfo {
         let order = Some(chapter_info.order.to_string());
         let (number, volume, format) = match chapter_info.group_name.as_str() {
             "单话" => (order, None, None),
@@ -70,12 +67,12 @@ impl ComicInfo {
 
         ComicInfo {
             manga: "Yes".to_string(),
-            series: chapter_info.comic_title,
+            series: chapter_info.comic_title.clone(),
             publisher: "漫画柜".to_string(),
-            writer: authors.join(", "),
-            genre: genre.join(", "),
-            summary: intro,
-            title: chapter_info.chapter_title,
+            writer: comic.authors.join(", "),
+            genre: comic.genres.join(", "),
+            summary: comic.intro.clone(),
+            title: chapter_info.chapter_title.clone(),
             number,
             volume,
             format,

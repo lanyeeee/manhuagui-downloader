@@ -1,7 +1,7 @@
 mod commands;
 mod config;
 mod decrypt;
-mod download_manager;
+mod downloader;
 mod errors;
 mod events;
 mod export;
@@ -11,18 +11,21 @@ mod manhuagui_client;
 mod types;
 mod utils;
 
-use anyhow::Context;
 use config::Config;
-use download_manager::DownloadManager;
-use events::{
-    DownloadEvent, DownloadTaskEvent, ExportCbzEvent, ExportPdfEvent, LogEvent,
-    UpdateDownloadedComicsEvent,
-};
+use eyre::WrapErr;
 use manhuagui_client::ManhuaguiClient;
 use parking_lot::RwLock;
 use tauri::{Manager, Wry};
 
-use crate::commands::*;
+use crate::{
+    commands::*,
+    downloader::download_manager::DownloadManager,
+    errors::install_custom_eyre_handler,
+    events::{
+        DownloadEvent, ExportCbzEvent, ExportPdfEvent, LogEvent, UpdateDownloadedComicsEvent,
+    },
+    export::ComicExportLock,
+};
 
 fn generate_context() -> tauri::Context<Wry> {
     tauri::generate_context!()
@@ -30,6 +33,8 @@ fn generate_context() -> tauri::Context<Wry> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    install_custom_eyre_handler().unwrap();
+
     let builder = tauri_specta::Builder::<Wry>::new()
         .commands(tauri_specta::collect_commands![
             greet,
@@ -39,18 +44,23 @@ pub fn run() {
             get_user_profile,
             search,
             get_comic,
-            download_chapters,
             get_favorite,
-            save_metadata,
             get_downloaded_comics,
             export_cbz,
             export_pdf,
+            export_cbz_chapters,
+            export_pdf_chapters,
             update_downloaded_comics,
             get_logs_dir_size,
             show_path_in_file_manager,
+            create_download_task,
             pause_download_task,
             resume_download_task,
-            cancel_download_task,
+            delete_download_task,
+            get_synced_comic,
+            get_synced_comic_in_favorite,
+            get_synced_comic_in_search,
+            open_log_file,
         ])
         .events(tauri_specta::collect_events![
             DownloadEvent,
@@ -58,7 +68,6 @@ pub fn run() {
             ExportPdfEvent,
             UpdateDownloadedComicsEvent,
             LogEvent,
-            DownloadTaskEvent,
         ]);
 
     #[cfg(debug_assertions)]
@@ -82,12 +91,14 @@ pub fn run() {
             let app_data_dir = app
                 .path()
                 .app_data_dir()
-                .context("获取app_data_dir目录失败")?;
+                .wrap_err("获取app_data_dir目录失败")?;
 
-            std::fs::create_dir_all(&app_data_dir)
-                .context(format!("创建app_data_dir目录`{app_data_dir:?}`失败"))?;
+            std::fs::create_dir_all(&app_data_dir).wrap_err(format!(
+                "创建app_data_dir目录`{}`失败",
+                app_data_dir.display()
+            ))?;
 
-            let config = RwLock::new(Config::new(app.handle())?);
+            let config = RwLock::new(Config::new(app.handle()).wrap_err("创建Config失败")?);
             app.manage(config);
 
             let manhuagui_client = ManhuaguiClient::new(app.handle().clone());
@@ -96,7 +107,10 @@ pub fn run() {
             let download_manager = DownloadManager::new(app.handle());
             app.manage(download_manager);
 
-            logger::init(app.handle())?;
+            let export_lock = ComicExportLock::new();
+            app.manage(export_lock);
+
+            logger::init(app.handle()).wrap_err("初始化日志系统失败")?;
 
             Ok(())
         })

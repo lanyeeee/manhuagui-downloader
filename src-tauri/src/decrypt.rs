@@ -1,8 +1,9 @@
 use std::collections::HashMap;
 
-use anyhow::{anyhow, Context};
+use eyre::{OptionExt, WrapErr};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
+use tracing::instrument;
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -48,53 +49,55 @@ pub struct Sl {
     m: String,
 }
 
-pub fn decrypt(html: &str) -> anyhow::Result<DecryptResult> {
+#[instrument(level = "error", skip_all)]
+pub fn decrypt(html: &str) -> eyre::Result<DecryptResult> {
     let (function, a, c, data) = extract_decryption_data(html)?;
 
     let dict = create_dict(a, c, &data);
 
-    let js = create_js(&function, &dict).context("生成js失败")?;
+    let js = create_js(&function, &dict).wrap_err("生成js失败")?;
 
-    let decrypt_result = create_decrypt_result(&js).context("生成DecryptResult失败")?;
+    let decrypt_result = create_decrypt_result(&js).wrap_err("生成DecryptResult失败")?;
 
     Ok(decrypt_result)
 }
 
-fn extract_decryption_data(html: &str) -> anyhow::Result<(String, i32, i32, Vec<String>)> {
+#[instrument(level = "error", skip_all)]
+fn extract_decryption_data(html: &str) -> eyre::Result<(String, i32, i32, Vec<String>)> {
     let re =
-        Regex::new(r"^.*}\('(.*)',(\d*),(\d*),'([\w|+/=]*)'.*$").context("正则表达式编译失败")?;
+        Regex::new(r"^.*}\('(.*)',(\d*),(\d*),'([\w|+/=]*)'.*$").wrap_err("正则表达式编译失败")?;
 
-    let captures = re.captures(html).context("正则表达式没有匹配到内容")?;
+    let captures = re.captures(html).ok_or_eyre("正则表达式没有匹配到内容")?;
 
     let function = captures
         .get(1)
-        .context("匹配到的内容没有function部分")?
+        .ok_or_eyre("匹配到的内容没有function部分")?
         .as_str()
         .to_string();
 
     let a = captures
         .get(2)
-        .context("匹配到的内容没有a部分")?
+        .ok_or_eyre("匹配到的内容没有a部分")?
         .as_str()
         .parse::<i32>()
-        .context("将a部分转换为整数失败")?;
+        .wrap_err("将a部分转换为整数失败")?;
 
     let c = captures
         .get(3)
-        .context("匹配到的内容没有c部分")?
+        .ok_or_eyre("匹配到的内容没有c部分")?
         .as_str()
         .parse::<i32>()
-        .context("将c部分转换为整数失败")?;
+        .wrap_err("将c部分转换为整数失败")?;
 
     let compressed_data = captures
         .get(4)
-        .context("匹配到的内容没有compressed_data部分")?
+        .ok_or_eyre("匹配到的内容没有compressed_data部分")?
         .as_str();
 
     let decompressed_data =
-        lz_str::decompress_from_base64(compressed_data).ok_or(anyhow!("lzstring解压缩失败"))?;
-    let decompressed =
-        String::from_utf16(&decompressed_data).context("lzstring解压缩后的数据不是utf-16字符串")?;
+        lz_str::decompress_from_base64(compressed_data).ok_or_eyre("lzstring解压缩失败")?;
+    let decompressed = String::from_utf16(&decompressed_data)
+        .wrap_err("lzstring解压缩后的数据不是utf-16字符串")?;
 
     let data = decompressed
         .split('|')
@@ -153,8 +156,9 @@ fn create_dict(a: i32, mut c: i32, data: &[String]) -> HashMap<String, String> {
     dict
 }
 
-fn create_js(function: &str, dict: &HashMap<String, String>) -> anyhow::Result<String> {
-    let re = Regex::new(r"(\b\w+\b)").context("正则表达式编译失败")?;
+#[instrument(level = "error", skip_all)]
+fn create_js(function: &str, dict: &HashMap<String, String>) -> eyre::Result<String> {
+    let re = Regex::new(r"(\b\w+\b)").wrap_err("正则表达式编译失败")?;
 
     let splits = re.split(function).collect::<Vec<_>>();
 
@@ -183,18 +187,19 @@ fn create_js(function: &str, dict: &HashMap<String, String>) -> anyhow::Result<S
     Ok(js)
 }
 
-fn create_decrypt_result(js: &str) -> anyhow::Result<DecryptResult> {
-    let re = Regex::new(r"^.*\((\{.*})\).*$").context("正则表达式编译失败")?;
+#[instrument(level = "error", skip_all)]
+fn create_decrypt_result(js: &str) -> eyre::Result<DecryptResult> {
+    let re = Regex::new(r"^.*\((\{.*})\).*$").wrap_err("正则表达式编译失败")?;
 
-    let captures = re.captures(js).context("正则表达式没有匹配到内容")?;
+    let captures = re.captures(js).ok_or_eyre("正则表达式没有匹配到内容")?;
 
     let json_str = captures
         .get(1)
-        .context("匹配到的内容没有json部分")?
+        .ok_or_eyre("匹配到的内容没有json部分")?
         .as_str();
 
     let decrypt_result = serde_json::from_str::<DecryptResult>(json_str)
-        .context("将解密后的数据转换为DecryptResult失败")?;
+        .wrap_err("将解密后的数据转换为DecryptResult失败")?;
 
     Ok(decrypt_result)
 }
